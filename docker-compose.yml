@@ -1,0 +1,96 @@
+services:
+  # ─── Base de datos PostgreSQL ───────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: depas_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-departamentos}
+      POSTGRES_USER: ${DB_USER:-depas_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-depas_secret_2024}
+      TZ: America/Mexico_City
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Puerto NO expuesto al host — el backend se conecta vía red Docker interna (db:5432)
+    # Exponer 5432 en producción no es necesario y causa conflictos si el host ya tiene PostgreSQL
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-depas_user} -d ${DB_NAME:-departamentos}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Backend API (ASP.NET Core / .NET 10) ───────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: production
+    container_name: depas_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      ASPNETCORE_ENVIRONMENT: Production
+      PORT: 3001
+      TZ: America/Mexico_City
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-departamentos}
+      DB_USER: ${DB_USER:-depas_user}
+      DB_PASSWORD: ${DB_PASSWORD:-depas_secret_2024}
+      JWT_SECRET: ${JWT_SECRET:-cambia_este_secreto_en_produccion}
+      JWT_EXPIRES_IN: 7d
+      # Código requerido para registrar una cuenta de Administrador nueva e
+      # independiente desde /register. Sin definir, ese registro queda cerrado.
+      ADMIN_SIGNUP_CODE: ${ADMIN_SIGNUP_CODE:-}
+      # Orígenes permitidos por CORS en producción (separados por coma).
+      FRONTEND_URL: ${FRONTEND_URL:-https://nethrent.duckdns.org}
+      # Clave de Google Gemini para el procesado IA del contrato (opcional).
+      GOOGLE_AI_API_KEY: ${GOOGLE_AI_API_KEY:-}
+      BACKUP_DIR: /app/backups
+      BACKUP_CRON: "0 4 * * *"
+      # Web Push (notificaciones del navegador) — par de llaves VAPID.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:soporte@vertexrent.app}
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - ./backups:/app/backups
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3001/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ─── Migraciones (se ejecuta una vez y termina) ──────────────────────────
+  # Reutiliza la imagen del backend; `--migrate` recrea el esquema completo
+  # (DESTRUCTIVO: hace DROP de las tablas antes de crearlas).
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: production
+    container_name: depas_migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      TZ: America/Mexico_City
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-departamentos}
+      DB_USER: ${DB_USER:-depas_user}
+      DB_PASSWORD: ${DB_PASSWORD:-depas_secret_2024}
+    command: ["--migrate"]
+    healthcheck:
+      disable: true
+    profiles:
+      - tools
+
+
+volumes:
+  pgdata:
+    driver: local

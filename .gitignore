@@ -1,0 +1,28 @@
+# Dependencias y compilados
+node_modules/
+**/bin/
+**/obj/
+web/dist/
+*.log
+
+# Secretos y datos locales (nunca al repositorio)
+.env
+**/.env
+backups/
+*.xlsx
+*.docx
+!backend/VertexRent.Api/Templates/contrato_base.docx
+
+# Sistema
+.DS_Store
+
+# Restos de versiones anteriores (Expo / Node), ya sin uso
+frontend-expo-old/
+backend-node-old/
+backend-node-backup.tar.gz
+/app.json
+/package.json
+/package-lock.json
+/tsconfig.json
+/skills-lock.json
+/AGENTS.md

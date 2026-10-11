@@ -1,0 +1,19 @@
+# Contexto de build de Docker (raíz del repo): excluir lo pesado y lo que no se usa en las imágenes
+.git
+**/node_modules
+**/.expo
+**/bin
+**/obj
+backend-node-old
+backend-node-backup.tar.gz
+backups
+*.log
+.env
+**/.env
+*.xlsx
+*.docx
+# La plantilla base del contrato se incrusta en el backend al compilar
+!backend/VertexRent.Api/Templates/contrato_base.docx
+frontend/build
+frontend-expo-old
+web/dist

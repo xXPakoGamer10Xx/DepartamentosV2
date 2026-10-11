@@ -1,0 +1,6 @@
+bin/
+obj/
+public/
+.env
+backups/*.sql
+*.log
