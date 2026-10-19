@@ -1,6 +1,6 @@
 import clsx from 'clsx'
-import { ChevronLeft, ChevronRight, LogOut, MoreHorizontal, X } from 'lucide-react'
-import { AnimatePresence, motion } from 'motion/react'
+import { ChevronLeft, ChevronRight, LogOut, MoreHorizontal } from 'lucide-react'
+import { AnimatePresence, motion, useDragControls } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
@@ -19,6 +19,7 @@ const SIDEBAR_KEY = 'nethrent_sidebar_collapsed'
 export function AppShell() {
   const { user, can, logout } = useAuth()
   const [more, setMore] = useState(false)
+  const dragSheet = useDragControls()
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem(SIDEBAR_KEY) === '1' } catch { return false }
   })
@@ -213,13 +214,25 @@ export function AppShell() {
                 animate={{ y: 0 }}
                 exit={{ y: '100%' }}
                 transition={{ type: 'spring', stiffness: 360, damping: 32 }}
-                className="safe-bottom absolute inset-x-0 bottom-0 rounded-t-3xl border-t border-line bg-card p-5 shadow-2xl"
+                drag="y"
+                dragControls={dragSheet}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.6 }}
+                onDragEnd={(_, info) => { if (info.offset.y > 90 || info.velocity.y > 500) setMore(false) }}
+                className="safe-bottom absolute inset-x-0 bottom-0 rounded-t-3xl border-t border-line bg-card px-5 pb-5 shadow-2xl"
               >
-                <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line-strong" />
-                <div className="mb-4 flex items-center justify-between">
-                  <p className="text-sm font-bold">{user.nombre_completo}</p>
-                  <button onClick={() => setMore(false)} aria-label="Cerrar" className="rounded-lg p-1.5 text-muted hover:bg-hover"><X className="size-5" /></button>
-                </div>
+                {/* La pestañita: se desliza hacia abajo o se toca para ocultar el menú */}
+                <button
+                  type="button"
+                  aria-label="Ocultar menú"
+                  onClick={() => setMore(false)}
+                  onPointerDown={e => dragSheet.start(e)}
+                  className="mx-auto flex w-full cursor-grab touch-none justify-center pb-3 pt-3 active:cursor-grabbing"
+                >
+                  <span className="h-1 w-10 rounded-full bg-line-strong" />
+                </button>
+                <p className="mb-4 text-sm font-bold">{user.nombre_completo}</p>
                 <div className="grid grid-cols-3 gap-3">
                   {rest.map((i, idx) => (
                     <motion.div

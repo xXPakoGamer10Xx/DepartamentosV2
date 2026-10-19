@@ -14,6 +14,7 @@ import { api } from '../../../lib/api'
 import { abrirPdf, guardarBlob } from '../../../lib/file'
 import { fechaHora } from '../../../lib/format'
 import type { ContratoVersion, PrepararContrato } from '../../../lib/types'
+import { nombreVisible } from '../../../lib/nombre'
 
 const ORIGEN: Record<PrepararContrato['origen'], string> = {
   sistema: 'Plantilla del sistema',
@@ -97,12 +98,12 @@ export function GenerarContratoModal({ inquilinoId, onClose }: { inquilinoId: st
           <div className="flex flex-col items-center gap-3 py-2 text-center">
             <SuccessCheck />
             <div>
-              <p className="font-extrabold">{d.inquilino.nombre_completo}</p>
+              <p className="font-extrabold">{nombreVisible(d.inquilino.nombre_completo)}</p>
               <p className="text-sm text-fg-2">Depto {d.inquilino.depto_numero} · versión {hecho.version} · {hecho.plantilla_nombre}</p>
             </div>
           </div>
           {hecho.aproximado && <Aviso>El servidor no tiene LibreOffice instalado: este PDF es una aproximación (sin tablas ni imágenes). El Word sí queda completo.</Aviso>}
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <Button icon={<Eye className="size-4" />} loading={bajar.isPending && bajar.variables?.ver} onClick={() => bajar.mutate({ id: hecho.id, formato: 'pdf', ver: true })}>Ver PDF</Button>
             <Button variant="secondary" icon={<Download className="size-4" />} onClick={() => bajar.mutate({ id: hecho.id, formato: 'pdf' })}>PDF</Button>
             <Button variant="secondary" icon={<Download className="size-4" />} onClick={() => bajar.mutate({ id: hecho.id, formato: 'docx' })}>Word</Button>
@@ -114,7 +115,7 @@ export function GenerarContratoModal({ inquilinoId, onClose }: { inquilinoId: st
       {d && !hecho && (
         <div className="space-y-5">
           <div className="rounded-xl bg-hover px-4 py-3">
-            <p className="font-bold">{d.inquilino.nombre_completo}</p>
+            <p className="font-bold">{nombreVisible(d.inquilino.nombre_completo)}</p>
             <p className="text-sm text-fg-2">Departamento {d.inquilino.depto_numero}</p>
           </div>
 

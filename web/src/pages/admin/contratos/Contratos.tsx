@@ -21,6 +21,7 @@ import type { Plantilla, ResumenContrato } from '../../../lib/types'
 import { vencimiento } from '../Inquilinos'
 import { AsignarPlantillaModal } from './AsignarPlantillaModal'
 import { GenerarContratoModal } from './GenerarContratoModal'
+import { nombreVisible } from '../../../lib/nombre'
 
 type Tab = 'contratos' | 'plantillas'
 type Filtro = 'todos' | 'vigentes' | 'porvencer' | 'vencidos'
@@ -58,6 +59,15 @@ function ListaContratos() {
   const [filtro, setFiltro] = useState<Filtro>('todos')
   const [search, setSearch] = useState('')
   const [generar, setGenerar] = useState<string | null>(null)
+  const qc = useQueryClient()
+  const todos = useMutation({
+    mutationFn: async () => (await api.generarPendientes()).data,
+    onSuccess: r => {
+      void qc.invalidateQueries({ queryKey: ['contratos-resumen'] })
+      toast(r.fallos.length ? `${r.generados} generados, ${r.fallos.length} con error: ${r.fallos.map(f => f.nombre).join(', ')}` : `${r.generados} contratos generados`, r.fallos.length ? 'error' : 'success')
+    },
+    onError: e => toast(e instanceof Error ? e.message : 'No se pudieron generar', 'error'),
+  })
   const { data = [], isLoading } = useQuery({ queryKey: ['contratos-resumen'], queryFn: async () => (await api.getResumenContratos()).data })
 
   const conteo = useMemo(() => {
@@ -75,7 +85,7 @@ function ListaContratos() {
   const bajar = useMutation({
     mutationFn: async ({ i, formato, ver }: { i: ResumenContrato; formato: 'pdf' | 'docx'; ver?: boolean }) => {
       const blob = await api.descargarContrato(i.contrato_id!, formato)
-      if (ver) abrirPdf(blob, `Contrato – ${i.nombre_completo}`)
+      if (ver) abrirPdf(blob, `Contrato – ${nombreVisible(i.nombre_completo)}`)
       else guardarBlob(blob, `contrato_${i.depto_numero}_${i.nombre_completo.replace(/\s+/g, '_')}.${formato}`)
     },
     onError: e => toast(e instanceof Error ? e.message : 'No se pudo descargar', 'error'),
@@ -88,6 +98,12 @@ function ListaContratos() {
 
   return (
     <>
+      {conteo.sinContrato > 0 && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-card p-4">
+          <p className="min-w-0 text-sm text-fg-2"><b className="text-fg">{conteo.sinContrato}</b> inquilino(s) sin contrato. Se generan con la fecha en que entraron.</p>
+          <Button loading={todos.isPending} icon={<FilePlus2 className="size-4" />} onClick={() => todos.mutate()}>Generar todos los pendientes</Button>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StaggerItem><Stat label="Contratos activos" numericValue={data.length} icon={<FileText />} /></StaggerItem>
         <StaggerItem><Stat label="Por vencer (30 días)" numericValue={conteo.porvencer} tone={conteo.porvencer ? 'text-warning' : ''} /></StaggerItem>
@@ -126,21 +142,22 @@ function ListaContratos() {
                     <td className="px-5 py-3">
                       <Link to={`/inquilinos/${i.id}`} className="flex items-center gap-3">
                         <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary-soft text-sm font-bold text-primary">{iniciales(i.nombre_completo)}</span>
-                        <span className="min-w-0"><span className="block truncate font-semibold">{i.nombre_completo}</span><span className="text-xs text-muted">Depto {i.depto_numero}</span></span>
+                        <span className="min-w-0"><span className="block truncate font-semibold">{nombreVisible(i.nombre_completo)}</span><span className="text-xs text-muted">Depto {i.depto_numero}</span></span>
                       </Link>
                     </td>
                     <td className="px-3 py-3"><span className="block">{fecha(i.fecha_inicio)} – {fecha(i.fecha_termino)}</span>{v && <Badge tone={v.tone}>{v.label}</Badge>}</td>
                     <td className="px-3 py-3 font-bold">{money(i.renta)}</td>
                     <td className="px-3 py-3">{i.contrato_id
-                      ? <span><Badge tone="success">Versión {i.version}</Badge><span className="mt-1 block text-xs text-muted">{i.plantilla_nombre} · {fecha(i.fecha_generacion)}</span></span>
+                      ? <span>{i.desactualizado ? <Badge tone="warning">Plantilla actualizada</Badge> : <Badge tone="success">Versión {i.version}</Badge>}<span className="mt-1 block text-xs text-muted">{i.plantilla_nombre} · {fecha(i.fecha_generacion)}</span></span>
                       : <Badge>Sin generar</Badge>}</td>
                     <td className="px-5 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        {i.contrato_id && <>
-                          <button onClick={() => bajar.mutate({ i, formato: 'pdf', ver: true })} className="grid size-9 place-items-center rounded-lg text-fg-2 hover:bg-hover" aria-label="Ver PDF" title="Ver PDF"><Eye className="size-[17px]" /></button>
-                          <button onClick={() => bajar.mutate({ i, formato: 'docx' })} className="grid size-9 place-items-center rounded-lg text-fg-2 hover:bg-hover" aria-label="Descargar Word" title="Descargar Word"><Download className="size-[17px]" /></button>
-                        </>}
-                        <Button variant={i.contrato_id ? 'secondary' : 'primary'} className="h-9 px-3.5" icon={<FilePlus2 className="size-4" />} onClick={() => setGenerar(i.id)}>{i.contrato_id ? 'Regenerar' : 'Generar'}</Button>
+                        {i.contrato_id && <button onClick={() => bajar.mutate({ i, formato: 'docx' })} className="grid size-9 place-items-center rounded-lg text-fg-2 hover:bg-hover" aria-label="Descargar Word" title="Descargar Word"><Download className="size-[17px]" /></button>}
+                        {i.contrato_id && !i.desactualizado && <button onClick={() => setGenerar(i.id)} className="grid size-9 place-items-center rounded-lg text-fg-2 hover:bg-hover" aria-label="Generar de nuevo" title="Generar de nuevo"><FilePlus2 className="size-[17px]" /></button>}
+                        {i.contrato_id && i.desactualizado && <button onClick={() => bajar.mutate({ i, formato: 'pdf', ver: true })} className="grid size-9 place-items-center rounded-lg text-fg-2 hover:bg-hover" aria-label="Ver contrato anterior" title="Ver contrato anterior"><Eye className="size-[17px]" /></button>}
+                        {i.contrato_id && !i.desactualizado
+                          ? <Button className="h-9 px-3.5" icon={<Eye className="size-4" />} onClick={() => bajar.mutate({ i, formato: 'pdf', ver: true })}>Ver contrato</Button>
+                          : <Button className="h-9 px-3.5" icon={<FilePlus2 className="size-4" />} onClick={() => setGenerar(i.id)}>Generar contrato</Button>}
                       </div>
                     </td>
                   </tr>
@@ -159,19 +176,26 @@ function ListaContratos() {
               <Card className="space-y-3 p-4">
                 <Link to={`/inquilinos/${i.id}`} className="flex items-center gap-3">
                   <span className="grid size-11 shrink-0 place-items-center rounded-full bg-primary-soft text-sm font-bold text-primary">{iniciales(i.nombre_completo)}</span>
-                  <span className="min-w-0 flex-1"><span className="block truncate font-bold">{i.nombre_completo}</span>
+                  <span className="min-w-0 flex-1"><span className="block truncate font-bold">{nombreVisible(i.nombre_completo)}</span>
                     <span className="text-xs text-muted">Depto {i.depto_numero} · {money(i.renta)} · hasta {fecha(i.fecha_termino)}</span></span>
                 </Link>
                 <div className="flex flex-wrap items-center gap-2">
                   {v && <Badge tone={v.tone}>{v.label}</Badge>}
-                  {i.contrato_id ? <Badge tone="success">Contrato v{i.version}</Badge> : <Badge>Sin generar</Badge>}
+                  {i.contrato_id ? (i.desactualizado ? <Badge tone="warning">Plantilla actualizada</Badge> : <Badge tone="success">Contrato v{i.version}</Badge>) : <Badge>Sin generar</Badge>}
                 </div>
                 <div className="flex gap-2">
-                  {i.contrato_id && <>
-                    <Button variant="secondary" className="h-10 flex-1 px-3" icon={<Eye className="size-4" />} onClick={() => bajar.mutate({ i, formato: 'pdf', ver: true })}>PDF</Button>
-                    <Button variant="secondary" className="h-10 flex-1 px-3" icon={<Download className="size-4" />} onClick={() => bajar.mutate({ i, formato: 'docx' })}>Word</Button>
-                  </>}
-                  <Button variant={i.contrato_id ? 'secondary' : 'primary'} className="h-10 flex-1 px-3" icon={<FilePlus2 className="size-4" />} onClick={() => setGenerar(i.id)}>{i.contrato_id ? 'Regenerar' : 'Generar'}</Button>
+                  {i.contrato_id && !i.desactualizado ? (
+                    <>
+                      <Button className="h-10 min-w-0 flex-1 px-3" icon={<Eye className="size-4" />} onClick={() => bajar.mutate({ i, formato: 'pdf', ver: true })}>Ver contrato</Button>
+                      <Button variant="secondary" className="size-10 shrink-0 px-0" aria-label="Descargar Word" title="Descargar Word" onClick={() => bajar.mutate({ i, formato: 'docx' })}><Download className="size-4" /></Button>
+                      <Button variant="secondary" className="size-10 shrink-0 px-0" aria-label="Generar de nuevo" title="Generar de nuevo" onClick={() => setGenerar(i.id)}><FilePlus2 className="size-4" /></Button>
+                    </>
+                  ) : (
+                    <>
+                      {i.contrato_id && <Button variant="secondary" className="h-10 flex-1 px-3" icon={<Eye className="size-4" />} onClick={() => bajar.mutate({ i, formato: 'pdf', ver: true })}>Anterior</Button>}
+                      <Button className="h-10 flex-[2] px-3" icon={<FilePlus2 className="size-4" />} onClick={() => setGenerar(i.id)}>Generar contrato</Button>
+                    </>
+                  )}
                 </div>
               </Card>
             </StaggerItem>

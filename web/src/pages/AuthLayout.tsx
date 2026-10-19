@@ -5,7 +5,7 @@ import { BrandLogo } from '../components/layout/BrandLogo'
 /** Marco común de login/registro: imagen de marca a la izquierda en escritorio, formulario a la derecha. */
 export function AuthLayout({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
-    <div className="grid min-h-full lg:grid-cols-2">
+    <div className="grid grid-cols-1 min-h-full lg:grid-cols-2">
       <div className="relative hidden overflow-hidden lg:block">
         <img src="/auth-bg.jpg" alt="" className="animate-ken-burns absolute inset-0 size-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-br from-[#0E1321]/85 via-[#0E1321]/60 to-primary/40" />

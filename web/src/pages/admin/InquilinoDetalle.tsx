@@ -15,7 +15,9 @@ import { abrirPdf, guardarBlob } from '../../lib/file'
 import { useAuth } from '../../lib/auth'
 import { fecha, fechaHora, iniciales, money, num } from '../../lib/format'
 import { GenerarContratoModal } from './contratos/GenerarContratoModal'
+import { useEstadosPago } from '../../lib/estadoPago'
 import { estadoChip, vencimiento } from './Inquilinos'
+import { nombreVisible } from '../../lib/nombre'
 
 const METODO = { efectivo: 'Efectivo', transferencia: 'Transferencia bancaria', ambos: 'Efectivo o transferencia' } as const
 const ACCION = { crear: 'Alta', editar: 'Edición', eliminar: 'Baja' } as Record<string, string>
@@ -29,6 +31,7 @@ export default function InquilinoDetalle() {
   const [baja, setBaja] = useState(false)
   const [generar, setGenerar] = useState(false)
   const puedeEditar = can('inquilinos.editar')
+  const pagos = useEstadosPago(can('pagos'))
 
   const { data: inq, isLoading, isError } = useQuery({ queryKey: ['inquilino', id], queryFn: async () => (await api.getInquilino(id)).data })
   const contratos = useQuery({ queryKey: ['contratos-historial', id], queryFn: async () => (await api.getHistorialContratos(id)).data, enabled: can('contratos') && !!inq })
@@ -55,18 +58,18 @@ export default function InquilinoDetalle() {
   if (isLoading) return <div className="grid place-items-center py-24"><Spinner className="size-8" /></div>
   if (isError || !inq) return <Card><EmptyState icon={FileText} title="Inquilino no encontrado"><Link to="/inquilinos" className="font-semibold text-primary">Volver a la lista</Link></EmptyState></Card>
 
-  const chip = estadoChip(inq)
+  const chip = estadoChip(inq, pagos?.get(inq.id))
   const venc = vencimiento(inq.fecha_termino)
   const activo = inq.estado === 'activo'
   const deposito = num(inq.deposito)
 
   return (
     <div className="space-y-6">
-      <PageHeader title={inq.nombre_completo} back="/inquilinos"
+      <PageHeader title={nombreVisible(inq.nombre_completo)} back="/inquilinos"
         subtitle={<Link to={`/departamentos/${inq.depto_numero}`} className="font-semibold text-primary hover:underline">Departamento {inq.depto_numero}</Link>}
         actions={<>
           <Badge tone={chip.tone}>{chip.label}</Badge>
-          {can('contratos') && activo && <Button variant={contratos.data?.length ? 'secondary' : 'primary'} icon={<FilePlus2 className="size-4" />} className="h-10 px-4" onClick={() => setGenerar(true)}>{contratos.data?.length ? 'Regenerar contrato' : 'Generar contrato'}</Button>}
+          {can('contratos') && activo && <Button icon={<FilePlus2 className="size-4" />} className="h-10 px-4" onClick={() => setGenerar(true)}>Generar contrato</Button>}
           {puedeEditar && activo && <Link to={`/inquilinos/${inq.id}/editar`}><Button variant="secondary" icon={<Pencil className="size-4" />} className="h-10 px-4">Editar</Button></Link>}
           {puedeEditar && activo && <Button variant="danger" icon={<UserMinus className="size-4" />} className="h-10 px-4" onClick={() => { darDeBaja.reset(); setBaja(true) }}>Dar de baja</Button>}
           {puedeEditar && !activo && <Link to={`/inquilinos/nuevo?desde=${inq.id}`}><Button className="h-10 px-4">Nuevo contrato</Button></Link>}
@@ -74,7 +77,7 @@ export default function InquilinoDetalle() {
 
       <Card className="flex items-center gap-4">
         <span className="grid size-16 shrink-0 place-items-center rounded-2xl bg-primary text-xl font-extrabold text-white shadow-lg shadow-primary/30">{iniciales(inq.nombre_completo)}</span>
-        <div className="grid flex-1 gap-x-8 gap-y-2 sm:grid-cols-3">
+        <div className="grid grid-cols-1 flex-1 gap-x-8 gap-y-2 sm:grid-cols-3">
           <Dato label="Renta mensual" value={money(inq.renta)} strong />
           <Dato label="Fecha de pago" value={inq.fecha_pago || '—'} />
           <Dato label="Vigencia" value={venc ? venc.label : '—'} tone={venc?.tone === 'warning' ? 'text-warning' : venc?.expired ? 'text-danger' : undefined} />
@@ -93,7 +96,7 @@ export default function InquilinoDetalle() {
         </Card>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Seccion titulo="Contrato" icon={<CalendarDays className="size-4" />}>
           <Fila label="Inicio" value={fecha(inq.fecha_inicio)} />
           <Fila label="Término" value={fecha(inq.fecha_termino)} />
@@ -162,7 +165,7 @@ export default function InquilinoDetalle() {
       <ConfirmDialog open={baja} title="Dar de baja" confirmLabel="Dar de baja" loading={darDeBaja.isPending}
         error={darDeBaja.error instanceof Error ? darDeBaja.error.message : null}
         onClose={() => setBaja(false)} onConfirm={() => darDeBaja.mutate()}>
-        <p>¿Dar de baja a <b className="text-fg">{inq.nombre_completo}</b>? El Depto {inq.depto_numero} quedará disponible y sus datos se conservarán en el historial.</p>
+        <p>¿Dar de baja a <b className="text-fg">{nombreVisible(inq.nombre_completo)}</b>? El Depto {inq.depto_numero} quedará disponible y sus datos se conservarán en el historial.</p>
       </ConfirmDialog>
     </div>
   )

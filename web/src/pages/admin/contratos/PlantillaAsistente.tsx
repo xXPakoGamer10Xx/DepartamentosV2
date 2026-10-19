@@ -259,7 +259,7 @@ export default function PlantillaAsistente() {
 
       {/* 3. Revisar */}
       {paso === 'revisar' && (
-        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
           <Card className="space-y-3 p-0">
             <div className="sticky top-0 z-10 rounded-t-2xl border-b border-line bg-card/95 px-5 py-3 backdrop-blur">
               {sel ? (
@@ -337,7 +337,7 @@ export default function PlantillaAsistente() {
 
       {/* 4. Probar y guardar */}
       {paso === 'probar' && (
-        <div className="grid items-start gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
           <Card className="space-y-4">
             <Input label="Nombre" value={nombre} onChange={e => setNombre(e.target.value)} />
             <Select label="Probar con los datos de" value={inquilinoId} onChange={e => setInquilinoId(e.target.value)}

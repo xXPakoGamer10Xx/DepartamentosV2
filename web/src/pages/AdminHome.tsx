@@ -15,9 +15,10 @@ import { diaPago, EPS, rowState, toSaldo, type EstadoActual, type RowState, type
 import { fecha, iniciales, money, num } from '../lib/format'
 import { useSSE } from '../lib/sse'
 import { useUsaApp } from '../lib/usaApp'
+import { nombreVisible } from '../lib/nombre'
 
 type Tab = 'atrasados' | 'porpagar' | 'pagados' | 'extras' | 'deposito'
-interface Fila { id: string; nombre: string; depto: number; renta: number; dia: number | null; state: RowState; saldo: Saldo }
+interface Fila { id: string; nombre: string; raw: string; depto: number; renta: number; dia: number | null; state: RowState; saldo: Saldo }
 
 const diasHasta = (iso: string) => Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000)
 const SIN_SALDO: Saldo = { total: 0, vencida: 0, periodoVencido: null, cuotasExtra: 0, deposito: 0 }
@@ -48,7 +49,7 @@ export default function AdminHome() {
     const sal = new Map<string, Saldo>(saldosQ.data.map(s => [s.inquilino_id, toSaldo(s)]))
     return inquilinos.data.map(i => {
       const saldo = sal.get(i.id) ?? SIN_SALDO
-      return { id: i.id, nombre: i.nombre_completo, depto: i.depto_numero, renta: num(i.renta), dia: diaPago(i.fecha_pago), state: rowState(est.get(i.id), saldo), saldo }
+      return { id: i.id, nombre: nombreVisible(i.nombre_completo), raw: i.nombre_completo, depto: i.depto_numero, renta: num(i.renta), dia: diaPago(i.fecha_pago), state: rowState(est.get(i.id), saldo), saldo }
     })
   }, [inquilinos.data, estados.data, saldosQ.data])
 
@@ -70,8 +71,8 @@ export default function AdminHome() {
   // ── Contratos ──
   const contratos = useMemo(() => {
     const base = inquilinos.data
-      ? inquilinos.data.map(i => ({ id: i.id, nombre: i.nombre_completo, depto: i.depto_numero, termino: i.fecha_termino }))
-      : (resumen.data ?? []).map(i => ({ id: i.id, nombre: i.nombre_completo, depto: i.depto_numero, termino: i.fecha_termino }))
+      ? inquilinos.data.map(i => ({ id: i.id, nombre: nombreVisible(i.nombre_completo), depto: i.depto_numero, termino: i.fecha_termino }))
+      : (resumen.data ?? []).map(i => ({ id: i.id, nombre: nombreVisible(i.nombre_completo), depto: i.depto_numero, termino: i.fecha_termino }))
     return base.filter(c => c.termino).map(c => ({ ...c, dias: diasHasta(c.termino) })).filter(c => c.dias <= 60).sort((a, b) => a.dias - b.dias)
   }, [inquilinos.data, resumen.data])
   const porVencer = contratos.filter(c => c.dias >= 0 && c.dias <= 30).length
@@ -148,7 +149,7 @@ export default function AdminHome() {
                 </div>
                 <Link to="/pagos" className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline">Ver todo <ArrowRight className="size-3.5" /></Link>
               </div>
-              <div className="custom-scrollbar mt-4 flex gap-2 overflow-x-auto px-5 pb-1">
+              <div className="mt-4 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {TABS.map(t => (
                   <button key={t.v} onClick={() => setTabSel(t.v)}
                     className={`shrink-0 cursor-pointer rounded-full border px-3.5 py-1.5 text-xs font-bold transition ${tab === t.v ? 'border-primary/50 bg-primary-soft text-fg' : 'border-line text-fg-2 hover:bg-hover'}`}>
@@ -164,7 +165,7 @@ export default function AdminHome() {
                 {listas[tab].slice(0, 8).map((f, idx) => (
                   <motion.li key={f.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: idx * 0.03 }}>
                     <Link to={`/pagos/${f.id}`} className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-hover/50">
-                      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary-soft text-xs font-bold text-primary">{iniciales(f.nombre)}</span>
+                      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary-soft text-xs font-bold text-primary">{iniciales(f.raw)}</span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold">{f.nombre}</span>
                         <span className="text-xs text-muted">Depto {f.depto}{f.dia ? ` · paga el ${f.dia}` : ''}{f.state === 'revision' && ' · '}{f.state === 'revision' && <span className="font-semibold text-warning">En revisión</span>}</span>
@@ -246,7 +247,7 @@ export default function AdminHome() {
                   {abiertos.slice(0, 4).map(t => (
                     <li key={t.id} className="px-3 py-2.5">
                       <p className="truncate text-sm font-semibold">{t.titulo}</p>
-                      <p className="text-xs text-muted">{t.inquilino_nombre ?? 'Inquilino'}{t.depto_numero ? ` · Depto ${t.depto_numero}` : ''}</p>
+                      <p className="text-xs text-muted">{nombreVisible(t.inquilino_nombre) || 'Inquilino'}{t.depto_numero ? ` · Depto ${t.depto_numero}` : ''}</p>
                     </li>
                   ))}
                 </ul>

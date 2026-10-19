@@ -100,7 +100,7 @@ export default function InquilinoTickets() {
       )}
 
       {tickets && tickets.length > 0 && (
-        <StaggerList className="grid gap-3 md:grid-cols-2">
+        <StaggerList className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {tickets.map(t => {
             const cfg = ESTADOS[t.estado]
             const restante = Math.max(0, CINCO_MIN - (now - new Date(t.created_at).getTime()))

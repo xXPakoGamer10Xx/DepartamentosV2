@@ -187,4 +187,6 @@ export interface ResumenContrato {
   id: string; nombre_completo: string; depto_numero: number; renta: Numeric; deposito: Numeric
   fecha_inicio: string; fecha_termino: string; estado: string
   contrato_id: string | null; version: number | null; plantilla_nombre: string | null; fecha_generacion: string | null
+  /** La plantilla que le toca ahora dice algo distinto de la usada al generar su contrato. */
+  desactualizado?: boolean
 }

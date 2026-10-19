@@ -143,6 +143,7 @@ export const api = {
   prepararContrato: (inquilinoId: string, plantillaId?: string) => request<PrepararContrato>('GET', `/contratos/inquilino/${inquilinoId}/preparar`, undefined, { plantilla_id: plantillaId }),
   generarContrato: (inquilinoId: string, d: { plantilla_id?: string; valores_extra?: Record<string, string>; completar?: Record<string, string> }) =>
     request<{ id: string; version: number; aproximado: boolean; plantilla_nombre: string }>('POST', `/contratos/inquilino/${inquilinoId}/generar`, d),
+  generarPendientes: () => request<{ generados: number; fallos: { nombre: string; error: string }[] }>('POST', '/contratos/generar-pendientes', {}),
   getResumenContratos: () => request<ResumenContrato[]>('GET', '/contratos/resumen'),
   getHistorialContratos: (inquilino_id?: string) => request<(ContratoVersion & { inquilino_id: string; nombre_completo: string; depto_numero: number })[]>('GET', '/contratos', undefined, { inquilino_id }),
   eliminarContrato: (id: string) => request<void>('DELETE', `/contratos/${id}`),
@@ -213,6 +214,8 @@ export const api = {
   // ── Notificaciones / push / respaldos ───────────────────────────────────
   getNotificaciones: () => request<Notificacion[]>('GET', '/notificaciones'),
   marcarTodasLeidas: () => request<void>('PUT', '/notificaciones/marcar-leidas'),
+  borrarNotificacion: (id: string) => request<void>('DELETE', `/notificaciones/${id}`),
+  borrarLeidas: () => request<void>('DELETE', '/notificaciones/leidas'),
   marcarLeida: (id: string) => request<Notificacion>('PUT', `/notificaciones/${id}/leida`),
   subscribeWebPush: (s: { endpoint: string; keys: { p256dh: string; auth: string } }) => request<void>('POST', '/push/web-subscribe', s),
   getBackups: () => request<BackupInfo[]>('GET', '/backups'),

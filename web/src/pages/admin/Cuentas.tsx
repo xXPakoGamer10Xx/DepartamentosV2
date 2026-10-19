@@ -71,7 +71,7 @@ export default function Cuentas() {
       )}
 
       {data.length > 0 && (
-        <div className="grid gap-5 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
           {data.map(c => (
             <StaggerItem key={c.id} layout>
               <Card className={`space-y-4 p-0 transition duration-200 hover:border-line-strong ${c.activo ? '' : 'opacity-60'}`}>

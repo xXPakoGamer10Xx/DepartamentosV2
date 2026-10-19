@@ -17,12 +17,12 @@ export default function Configuracion() {
   const [sp, setSp] = useSearchParams()
   const tab = (TABS.find(t => t.value === sp.get('tab'))?.value ?? 'general') as Tab
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <PageHeader title="Configuración" subtitle="Tu cuenta, el equipo y el funcionamiento del sistema" />
       <Segmented value={tab} onChange={t => setSp(t === 'general' ? {} : { tab: t }, { replace: true })} options={TABS} />
       <AnimatePresence mode="wait">
         <motion.div
-          key={tab}
+          key={tab} className="min-w-0"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -6 }}

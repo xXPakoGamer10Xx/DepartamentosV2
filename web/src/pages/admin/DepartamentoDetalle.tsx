@@ -15,6 +15,7 @@ import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { fecha, money } from '../../lib/format'
 import { ESTADO_DEPTO, InventarioEditor } from './Departamentos'
+import { nombreVisible } from '../../lib/nombre'
 
 export default function DepartamentoDetalle() {
   const { numero = '' } = useParams()
@@ -74,12 +75,12 @@ export default function DepartamentoDetalle() {
           {esAdmin && libre && <Button variant="danger" className="h-10 px-4" icon={<Trash2 className="size-4" />} onClick={() => { eliminar.reset(); setBorrar(true) }}>Eliminar</Button>}
         </>} />
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Card className="space-y-3">
           <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-fg-2"><UserRound className="size-4" /> Inquilino actual</h2>
           {actual ? (
             <Link to={`/inquilinos/${actual.id}`} className="flex items-center justify-between gap-3 rounded-xl bg-hover p-4 transition hover:bg-line">
-              <span><span className="block font-bold">{actual.nombre}</span><span className="text-xs text-fg-2">{fecha(actual.fecha_inicio)} → {fecha(actual.fecha_termino)}</span></span>
+              <span><span className="block font-bold">{nombreVisible(actual.nombre)}</span><span className="text-xs text-fg-2">{fecha(actual.fecha_inicio)} → {fecha(actual.fecha_termino)}</span></span>
               <span className="font-extrabold">{money(actual.renta)}</span>
             </Link>
           ) : <p className="text-sm text-muted">Sin inquilino activo</p>}
@@ -114,7 +115,7 @@ export default function DepartamentoDetalle() {
               {depto.historial_inquilinos.map(h => (
                 <li key={h.id}>
                   <Link to={`/inquilinos/${h.id}`} className="flex items-center justify-between gap-3 py-3 text-sm hover:text-primary">
-                    <span><b>{h.nombre}</b><span className="block text-xs text-muted">{fecha(h.fecha_inicio)} → {fecha(h.fecha_termino)}</span></span>
+                    <span><b>{nombreVisible(h.nombre)}</b><span className="block text-xs text-muted">{fecha(h.fecha_inicio)} → {fecha(h.fecha_termino)}</span></span>
                     <span className="flex items-center gap-3"><b>{money(h.renta)}</b><Badge tone={h.estado === 'activo' ? 'success' : 'neutral'}>{h.estado === 'activo' ? 'Activo' : 'Archivado'}</Badge></span>
                   </Link>
                 </li>

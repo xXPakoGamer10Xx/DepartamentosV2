@@ -21,6 +21,7 @@ import { diaPago, EPS, puedeCancelar, rowState, toSaldo, type EstadoActual, type
 import { iniciales, money, num, periodoLabel } from '../../lib/format'
 import { useSSE } from '../../lib/sse'
 import type { Inquilino } from '../../lib/types'
+import { nombreVisible } from '../../lib/nombre'
 
 type Tab = 'todos' | 'pagados' | 'revision' | 'pendientes' | 'atrasados' | 'cuotas_extra' | 'deposito'
 type Sort = 'depto' | 'dia_asc' | 'dia_desc' | 'monto_desc' | 'monto_asc' | 'nombre'
@@ -80,7 +81,10 @@ export default function Pagos() {
     const vencido = lista.reduce((a, i) => a + (saldos.get(i.id)?.vencida ?? 0), 0)
     const sum = (f: (s: Saldo) => number) => lista.reduce((a, i) => a + f(saldos.get(i.id) ?? { total: 0, vencida: 0, periodoVencido: null, cuotasExtra: 0, deposito: 0 }), 0)
     let valor = 0, label = 'Por recaudar total', sub = ''
-    if (tab === 'pagados' || tab === 'pendientes') { valor = rows.filter(r => r.state === 'pendiente' || r.state === 'atrasado').reduce((a, r) => a + num(r.i.renta), 0); label = 'Rentas por cobrar' }
+    if (tab === 'pagados' || tab === 'pendientes') { valor = rows.filter(r => r.state === 'pendiente' || r.state === 'atrasado').reduce((a, r) => a + num(r.i.renta), 0); label = 'Rentas por cobrar'
+      sub = counts.pendientes === 0 ? 'Todo cobrado' : `${counts.pendientes} inquilino(s) por pagar${counts.atrasados ? ` · ${counts.atrasados} con atraso` : ''}`
+      if (tab === 'pagados') sub = `${counts.pagados} de ${counts.todos} inquilino(s) ya pagaron` }
+    else if (tab === 'revision') { valor = rows.filter(r => r.state === 'revision').reduce((a, r) => a + num(r.i.renta), 0); label = 'En revisión'; sub = `${counts.revision} comprobante(s) por revisar` }
     else if (tab === 'atrasados') { valor = vencido; label = 'Dinero atrasado'; sub = `${counts.atrasados} inquilino(s) con atraso` }
     else if (tab === 'cuotas_extra') { valor = sum(s => s.cuotasExtra); label = 'Cuotas extra'; sub = `${counts.cuotas_extra} inquilino(s) pendiente(s)` }
     else if (tab === 'deposito') { valor = sum(s => s.deposito); label = 'Falta depósito'; sub = `${counts.deposito} inquilino(s) sin depósito` }
@@ -121,7 +125,7 @@ export default function Pagos() {
       const pagoId = res.data?.id
       if (pagoId) {
         if (undoTimer.current) clearTimeout(undoTimer.current)
-        setUndo({ pagoId, nombre: i.nombre_completo })
+        setUndo({ pagoId, nombre: nombreVisible(i.nombre_completo) })
         undoTimer.current = setTimeout(() => setUndo(null), 5000)
       }
     },
@@ -186,22 +190,22 @@ export default function Pagos() {
             className="h-11 w-full rounded-xl border border-line bg-card pl-10 pr-9 text-sm placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25" />
           {search && <button onClick={() => setSearch('')} aria-label="Limpiar" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-fg"><X className="size-4" /></button>}
         </div>
-        <label className="relative inline-flex items-center">
+        <label className="relative flex w-full items-center sm:inline-flex sm:w-auto">
           <span className="sr-only">Ordenar por</span>
           <ArrowUpDown className="pointer-events-none absolute left-3.5 size-4 text-muted" />
-          <select value={sort} onChange={e => setSort(e.target.value as Sort)} className="h-11 cursor-pointer appearance-none rounded-xl border border-line bg-card pl-10 pr-10 text-sm font-semibold transition hover:border-line-strong focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25">
+          <select value={sort} onChange={e => setSort(e.target.value as Sort)} className="h-11 w-full cursor-pointer appearance-none rounded-xl border border-line bg-card pl-10 pr-10 text-sm font-semibold transition hover:border-line-strong focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25">
             {SORTS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
           <ChevronDown className="pointer-events-none absolute right-3.5 size-4 text-fg-2" />
         </label>
       </StaggerItem>
 
-      <StaggerItem className="flex flex-wrap gap-1.5 sm:gap-2">
+      <StaggerItem className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 sm:gap-2">
         {TABS.map(t => {
           const active = tab === t.key
           return (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`relative shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors sm:px-4 sm:text-sm ${active ? `border-transparent ${tabColor[t.key] ?? 'text-fg'}` : 'border-transparent text-fg-2 hover:bg-hover'}`}>
+            <button key={t.key} onClick={e => { setTab(t.key); e.currentTarget.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }) }}
+              className={`relative shrink-0 whitespace-nowrap rounded-full border px-3.5 py-2 text-center text-xs font-semibold transition-colors sm:px-4 sm:py-1.5 sm:text-sm ${active ? `border-transparent ${tabColor[t.key] ?? 'text-fg'}` : 'border-transparent text-fg-2 hover:bg-hover'}`}>
               {active && (
                 <motion.span
                   layoutId="pagos-tab-pill"
@@ -234,7 +238,7 @@ export default function Pagos() {
                 <Link to={`/pagos/${i.id}`} className="flex min-w-56 flex-1 items-center gap-3">
                   <span className="grid size-11 shrink-0 place-items-center rounded-full bg-primary-soft text-sm font-bold text-primary">{iniciales(i.nombre_completo)}</span>
                   <span className="min-w-0">
-                    <span className="block truncate font-bold">{i.nombre_completo}</span>
+                    <span className="block truncate font-bold">{nombreVisible(i.nombre_completo)}</span>
                     <span className="text-xs text-fg-2">Depto {i.depto_numero} · día {diaPago(i.fecha_pago) ?? '—'} · {transfer ? (usaQr ? 'SPEI' : 'Transferencia') : usaQr ? <><QrCode className="mr-0.5 inline size-3" />Efectivo</> : 'Efectivo'}</span>
                   </span>
                 </Link>
@@ -252,7 +256,7 @@ export default function Pagos() {
                 <div className="flex min-w-44 justify-end gap-2">
                   {puedeMarcar && state === 'revision' && e?.pago_id && <Button className="h-9 px-3" loading={busy} icon={<CheckCircle2 className="size-4" />} onClick={() => validar.mutate(e.pago_id!)}>Validar</Button>}
                   {puedeMarcar && (state === 'pendiente' || state === 'atrasado') && <Button variant="secondary" className="h-9 px-3" loading={busy} icon={<Banknote className="size-4" />} onClick={() => marcar.mutate(i)}>Marcar pagado</Button>}
-                  {puedeMarcar && state === 'pagado' && puedeCancelar(e) && <Button variant="ghost" className="h-9 px-3 text-danger" icon={<Undo2 className="size-4" />} onClick={() => { cancelarPago.reset(); setCancelar({ pagoId: e!.pago_id!, nombre: i.nombre_completo }) }}>Cancelar</Button>}
+                  {puedeMarcar && state === 'pagado' && puedeCancelar(e) && <Button variant="ghost" className="h-9 px-3 text-danger" icon={<Undo2 className="size-4" />} onClick={() => { cancelarPago.reset(); setCancelar({ pagoId: e!.pago_id!, nombre: nombreVisible(i.nombre_completo) }) }}>Cancelar</Button>}
                   <Link to={`/pagos/${i.id}`}><Button variant="ghost" className="h-9 px-3" icon={<Landmark className="size-4" />}>Detalle</Button></Link>
                 </div>
               </Card>

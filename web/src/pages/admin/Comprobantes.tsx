@@ -14,6 +14,7 @@ import { useToast } from '../../components/ui/Toast'
 import { api } from '../../lib/api'
 import { haceCuanto, money, periodoLabel } from '../../lib/format'
 import { useSSE } from '../../lib/sse'
+import { nombreVisible } from '../../lib/nombre'
 
 type Item = Awaited<ReturnType<typeof api.getComprobantesPendientes>>['data'][number]
 
@@ -55,16 +56,16 @@ export default function Comprobantes() {
       )}
 
       {n > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {q.data?.map(c => (
             <StaggerItem key={c.id} layout>
               <Card className="group overflow-hidden p-0 transition duration-200 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md">
                 <button onClick={() => setSel(c)} className="block w-full text-left">
                   <div className="grid h-40 place-items-center overflow-hidden bg-hover">
-                    {c.comprobante_url ? <img src={c.comprobante_url} alt={`Comprobante de ${c.nombre_completo}`} className="size-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" /> : <FileImage className="size-10 text-muted" />}
+                    {c.comprobante_url ? <img src={c.comprobante_url} alt={`Comprobante de ${nombreVisible(c.nombre_completo)}`} className="size-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" /> : <FileImage className="size-10 text-muted" />}
                   </div>
                   <div className="space-y-1 p-4">
-                    <p className="truncate font-bold">{c.nombre_completo}</p>
+                    <p className="truncate font-bold">{nombreVisible(c.nombre_completo)}</p>
                     <p className="text-sm text-fg-2">Depto {c.depto_numero} · <span className="inline-block first-letter:uppercase">{periodoLabel(c.periodo)}</span></p>
                     <div className="flex items-center justify-between pt-1"><b>{money(c.monto)}</b><span className="text-xs text-muted">{c.comprobante_subido_en ? haceCuanto(c.comprobante_subido_en) : ''}</span></div>
                   </div>
@@ -81,7 +82,7 @@ export default function Comprobantes() {
           <div className="space-y-4">
             {sel.comprobante_url && <img src={sel.comprobante_url} alt="Comprobante" className="max-h-[55vh] w-full rounded-xl bg-hover object-contain" />}
             <div className="flex items-center justify-between text-sm">
-              <span><Link to={`/pagos/${sel.inquilino_id}`} className="font-bold text-primary hover:underline">{sel.nombre_completo}</Link><span className="block text-fg-2">Depto {sel.depto_numero} · <span className="inline-block first-letter:uppercase">{periodoLabel(sel.periodo)}</span></span></span>
+              <span><Link to={`/pagos/${sel.inquilino_id}`} className="font-bold text-primary hover:underline">{nombreVisible(sel.nombre_completo)}</Link><span className="block text-fg-2">Depto {sel.depto_numero} · <span className="inline-block first-letter:uppercase">{periodoLabel(sel.periodo)}</span></span></span>
               <b className="text-lg">{money(sel.monto)}</b>
             </div>
             <div className="grid grid-cols-2 gap-2">

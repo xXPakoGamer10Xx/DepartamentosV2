@@ -46,7 +46,7 @@ public static class ContratoVariables
         new("banco_clabe", "CLABE", GPagos, "012180001234567890"),
         new("banco_titular", "Titular de la cuenta", GPagos, "Roberto González"),
 
-        new("fecha_actual", "Fecha de hoy", GFechas, "05 de enero de 2025"),
+        new("fecha_actual", "Fecha del contrato (día que entró)", GFechas, "01 de enero de 2025"),
         new("fecha_inicio", "Inicio del contrato", GFechas, "01 de enero de 2025"),
         new("fecha_termino", "Fin del contrato", GFechas, "31 de diciembre de 2025"),
         new("duracion_meses", "Duración (meses)", GFechas, "12"),
@@ -135,7 +135,8 @@ public static class ContratoVariables
             ["banco_clabe"] = data.Str("banco_clabe"),
             ["banco_titular"] = data.Str("banco_titular"),
 
-            ["fecha_actual"] = ContractFormat.Today(true),
+            // La fecha del contrato es el día en que entró el inquilino, no el día en que se genera el archivo.
+            ["fecha_actual"] = string.IsNullOrWhiteSpace(data.S("fecha_inicio")) ? ContractFormat.Today(true) : ContractFormat.LongDate(data.S("fecha_inicio"), true),
             ["fecha_inicio"] = ContractFormat.LongDate(data.S("fecha_inicio"), true),
             ["fecha_termino"] = ContractFormat.LongDate(data.S("fecha_termino"), true),
             ["duracion_meses"] = meses?.ToString() ?? "",

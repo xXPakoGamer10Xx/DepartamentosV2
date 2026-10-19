@@ -10,7 +10,7 @@ export function PageHeader({ title, subtitle, back, actions }: { title: string; 
         <h1 className="truncate text-2xl font-extrabold tracking-tight">{title}</h1>
         {subtitle && <p className="text-sm text-fg-2">{subtitle}</p>}
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{actions}</div>}
     </div>
   )
 }

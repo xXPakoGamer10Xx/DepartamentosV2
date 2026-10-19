@@ -40,6 +40,7 @@ public static class ContratosEndpoints
 
         g.MapGet("/inquilino/{id}/preparar", H(Preparar)).Permiso("contratos");
         g.MapPost("/inquilino/{id}/generar", H(GenerarContrato)).Permiso("contratos");
+        g.MapPost("/generar-pendientes", H(GenerarPendientes)).Permiso("contratos");
 
         g.MapGet("/resumen", H(Resumen)).Permiso("contratos");
         g.MapGet("/", H(Historial)).Permiso("contratos");
@@ -408,14 +409,36 @@ public static class ContratosEndpoints
                 }
             }
 
+        var r = await GenerarYGuardar(c, u, id, b.S("plantilla_id"), b["valores_extra"] as JsonObject);
+        return Api.Data(r, 201);
+    }
+
+    // Genera TODOS los contratos pendientes (inquilinos activos sin contrato) con su plantilla resuelta.
+    static async Task<IResult> GenerarPendientes(HttpContext c)
+    {
+        var u = c.Me();
+        var pend = await Db.Query(
+            @"SELECT i.id, i.nombre_completo FROM inquilinos i
+              WHERE i.admin_id = $1 AND i.estado = 'activo'
+                AND NOT EXISTS (SELECT 1 FROM contratos k WHERE k.admin_id = i.admin_id AND k.inquilino_id = i.id)
+              ORDER BY i.nombre_completo", u.Id);
+        int ok = 0; var fallos = new List<object?>();
+        foreach (var f in pend.Rows)
+        {
+            try { await GenerarYGuardar(c, u, f.S("id")!, null, null); ok++; }
+            catch (Exception e) { fallos.Add(new Dictionary<string, object?> { ["nombre"] = f.S("nombre_completo"), ["error"] = e.Message }); }
+        }
+        return Api.Data(new Dictionary<string, object?> { ["generados"] = ok, ["fallos"] = fallos });
+    }
+
+    static async Task<Dictionary<string, object?>> GenerarYGuardar(HttpContext c, AuthUser u, string id, string? plantillaId, JsonObject? extra)
+    {
         // 2) Plantilla y datos
         var ctx = await ContratoServicio.CargarContexto(u.Id, id);
-        var plantillaId = b.S("plantilla_id");
         var p = string.IsNullOrEmpty(plantillaId)
             ? await ContratoServicio.ResolverPlantilla(u.Id, ctx.Inquilino, ctx.Depto)
             : await ContratoServicio.CargarPlantilla(u.Id, plantillaId);
 
-        var extra = b["valores_extra"] as JsonObject;
         var res = await ContratoServicio.Generar(p, ctx, extra);
 
         // 3) Historial: una fila por versión
@@ -423,21 +446,22 @@ public static class ContratosEndpoints
         foreach (var (k, v) in ContratoVariables.Build(new ContractData(ctx.Data))) snapshot[k] = v;
         var ins = await Db.Query(
             @"INSERT INTO contratos (inquilino_id, depto_numero, datos_contrato, generado_por, admin_id, plantilla_id, plantilla_nombre,
-                                     version, docx, pdf, valores_extra, aproximado)
+                                     version, docx, pdf, valores_extra, aproximado, plantilla_hash)
               VALUES ($1, $2, $3, $4, $5, $6, $7,
                       COALESCE((SELECT MAX(version) FROM contratos WHERE admin_id = $5 AND inquilino_id = $1), 0) + 1,
-                      $8, $9, $10, $11)
+                      $8, $9, $10, $11, $12)
               RETURNING id, version",
             id, ctx.Inquilino.S("depto_numero"), snapshot.ToJsonString(), u.Actor, u.Id,
-            p.Sistema ? null : p.Id, p.Nombre, res.Docx, res.Pdf, (extra ?? new JsonObject()).ToJsonString(), res.Aproximado);
+            p.Sistema ? null : p.Id, p.Nombre, res.Docx, res.Pdf, (extra ?? new JsonObject()).ToJsonString(), res.Aproximado,
+            ContratoServicio.HashTexto(p.Docx));
         var fila = ins.First!;
         await Audit.Log(c, "contratos", "crear", fila.S("id")!, null,
             new Dictionary<string, object?> { ["inquilino_id"] = id, ["version"] = fila.S("version"), ["plantilla"] = p.Nombre });
 
-        return Api.Data(new Dictionary<string, object?>
+        return new Dictionary<string, object?>
         {
             ["id"] = fila.S("id"), ["version"] = fila.I("version"), ["aproximado"] = res.Aproximado, ["plantilla_nombre"] = p.Nombre,
-        }, 201);
+        };
     }
 
     // ── Listados y descargas ────────────────────────────────────────────────────────────────
@@ -447,14 +471,30 @@ public static class ContratosEndpoints
         var u = c.Me();
         var r = await Db.Query(
             @"SELECT i.id, i.nombre_completo, i.depto_numero, i.renta, i.fecha_inicio, i.fecha_termino, i.deposito, i.estado,
-                     k.id AS contrato_id, k.version, k.plantilla_nombre, k.fecha_generacion
+                     i.plantilla_id AS inq_plantilla, d.plantilla_id AS depto_plantilla,
+                     k.id AS contrato_id, k.version, k.plantilla_nombre, k.fecha_generacion, k.plantilla_hash
               FROM inquilinos i
+              LEFT JOIN departamentos d ON d.admin_id = i.admin_id AND d.numero = i.depto_numero
               LEFT JOIN LATERAL (
-                SELECT id, version, plantilla_nombre, fecha_generacion FROM contratos
+                SELECT id, version, plantilla_nombre, fecha_generacion, plantilla_hash FROM contratos
                 WHERE admin_id = $1 AND inquilino_id = i.id ORDER BY version DESC LIMIT 1) k ON TRUE
               WHERE i.admin_id = $1 AND i.estado = 'activo'
               ORDER BY i.fecha_termino ASC NULLS LAST, i.nombre_completo", u.Id);
-        return Api.Data(r.Rows);
+
+        // ¿La plantilla que le toca hoy dice algo distinto de la que se usó al generar? Entonces el contrato quedó desactualizado.
+        var pl = await Db.Query("SELECT id, estado, predeterminada, docx_plantilla FROM plantillas_contrato WHERE admin_id = $1 AND estado = 'lista'", u.Id);
+        var hashes = pl.Rows.ToDictionary(x => x.S("id")!, x => ContratoServicio.HashTexto((byte[])x["docx_plantilla"]!));
+        var defecto = pl.Rows.FirstOrDefault(x => x.B("predeterminada"))?.S("id");
+        var hashSistema = ContratoServicio.HashTexto(PlantillaSistema.Docx);
+        string HashActual(Row i)
+        {
+            foreach (var id in new[] { i.S("inq_plantilla"), i.S("depto_plantilla"), defecto })
+                if (id != null && hashes.TryGetValue(id, out var h)) return h;
+            return hashSistema;
+        }
+        var filas = r.Rows.Select(i => i.With(("desactualizado", i.S("contrato_id") != null && !string.IsNullOrEmpty(i.S("plantilla_hash")) && i.S("plantilla_hash") != HashActual(i)))
+            .Without("plantilla_hash").Without("inq_plantilla").Without("depto_plantilla")).ToList();
+        return Api.Data(filas);
     }
 
     static async Task<IResult> Historial(HttpContext c)

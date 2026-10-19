@@ -10,6 +10,8 @@ public static class NotificacionesEndpoints
 
         g.MapGet("/", async (HttpContext c) =>
         {
+            // Las ya leídas se limpian solas pasados 7 días.
+            await Db.Query("DELETE FROM notificaciones WHERE usuario_id = $1 AND leido = true AND created_at < now() - interval '7 days'", c.Me().Id);
             var r = await Db.Query(
                 @"SELECT * FROM notificaciones
                   WHERE usuario_id = $1
@@ -22,6 +24,18 @@ public static class NotificacionesEndpoints
         {
             await Db.Query("UPDATE notificaciones SET leido = true WHERE usuario_id = $1", c.Me().Id);
             return Api.Msg("Todas las notificaciones fueron marcadas como leídas");
+        });
+
+        g.MapDelete("/leidas", async (HttpContext c) =>
+        {
+            await Db.Query("DELETE FROM notificaciones WHERE usuario_id = $1 AND leido = true", c.Me().Id);
+            return Api.Msg("Notificaciones leídas eliminadas");
+        });
+
+        g.MapDelete("/{id}", async (HttpContext c) =>
+        {
+            await Db.Query("DELETE FROM notificaciones WHERE id = $1 AND usuario_id = $2", Api.Route(c, "id"), c.Me().Id);
+            return Api.Msg("Notificación eliminada");
         });
 
         g.MapPut("/{id}/leida", async (HttpContext c) =>

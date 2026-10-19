@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bell, BellOff, CheckCheck, CreditCard, FileText, MessageSquare, Wallet } from 'lucide-react'
+import { Bell, BellOff, CheckCheck, CreditCard, FileText, MessageSquare, Trash2, Wallet } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../../lib/api'
@@ -58,6 +58,14 @@ export function NotificationBell({
     qc.setQueryData<Notificacion[]>(['notificaciones'], (old) => old?.map(n => ({ ...n, leido: true })))
     await api.marcarTodasLeidas().catch(refresh)
   }
+  const borrarUna = async (n: Notificacion) => {
+    qc.setQueryData<Notificacion[]>(['notificaciones'], (old) => old?.filter(x => x.id !== n.id))
+    await api.borrarNotificacion(n.id).catch(refresh)
+  }
+  const borrarLeidas = async () => {
+    qc.setQueryData<Notificacion[]>(['notificaciones'], (old) => old?.filter(x => !x.leido))
+    await api.borrarLeidas().catch(refresh)
+  }
   const markOne = async (n: Notificacion) => {
     if (n.leido) return
     qc.setQueryData<Notificacion[]>(['notificaciones'], (old) => old?.map(x => x.id === n.id ? { ...x, leido: true } : x))
@@ -114,11 +122,18 @@ export function NotificationBell({
           >
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
               <h3 className="text-sm font-bold">Notificaciones</h3>
-              {unread > 0 && (
-                <button onClick={markAll} className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
-                  <CheckCheck className="size-3.5" /> Marcar leídas
-                </button>
-              )}
+              <div className="flex items-center gap-3">
+                {unread > 0 && (
+                  <button onClick={markAll} className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                    <CheckCheck className="size-3.5" /> Marcar leídas
+                  </button>
+                )}
+                {items.some(n => n.leido) && (
+                  <button onClick={borrarLeidas} className="flex items-center gap-1 text-xs font-semibold text-danger hover:underline">
+                    <Trash2 className="size-3.5" /> Borrar leídas
+                  </button>
+                )}
+              </div>
             </div>
             {showPushBanner && (
               <div className="space-y-2.5 border-b border-line bg-elevated/50 px-4 py-3.5">
@@ -148,12 +163,12 @@ export function NotificationBell({
                 const Icon = iconos[n.tipo] ?? Bell
                 return (
                   <motion.li
-                    key={n.id}
+                    key={n.id} className="relative"
                     initial={{ opacity: 0, x: -8 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: Math.min(idx * 0.03, 0.2) }}
                   >
-                    <button onClick={() => markOne(n)} className={`flex w-full gap-3 px-4 py-3 text-left transition hover:bg-hover ${n.leido ? 'opacity-60' : ''}`}>
+                    <button onClick={() => markOne(n)} className={`flex w-full gap-3 px-4 py-3 pr-11 text-left transition hover:bg-hover ${n.leido ? 'opacity-60' : ''}`}>
                       <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-primary-soft text-primary"><Icon className="size-4" /></span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold">{n.titulo}</span>
@@ -161,6 +176,10 @@ export function NotificationBell({
                         <span className="mt-0.5 block text-[11px] text-muted">{haceCuanto(n.created_at)}</span>
                       </span>
                       {!n.leido && <span className="mt-2 size-2 shrink-0 rounded-full bg-primary" />}
+                    </button>
+                    <button type="button" aria-label="Borrar notificación" onClick={() => borrarUna(n)}
+                      className="absolute right-2 top-2 grid size-8 place-items-center rounded-lg text-muted transition hover:bg-danger-soft hover:text-danger">
+                      <Trash2 className="size-4" />
                     </button>
                   </motion.li>
                 )

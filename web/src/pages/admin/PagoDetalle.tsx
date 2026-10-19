@@ -26,6 +26,7 @@ import { fecha, fechaHora, money, num, periodoLabel } from '../../lib/format'
 import { buildReciboHtml, imprimirHtml } from '../../lib/recibo'
 import { useSSE } from '../../lib/sse'
 import type { Abono } from '../../lib/types'
+import { nombreVisible } from '../../lib/nombre'
 
 const KEYS = ['estado-pago', 'abonos', 'deposito-saldo', 'deposito-abonos', 'promesas', 'saldo', 'historial-pagos-admin', 'estados-actuales', 'saldos', 'resumen-deuda', 'cuotas']
 const errMsg = (e: unknown, f: string) => (e instanceof Error ? e.message : f)
@@ -111,10 +112,10 @@ export default function PagoDetalle() {
   return (
     <div className="space-y-6">
       <PageHeader title="Cobrar renta" back="/pagos"
-        subtitle={<><Link to={`/inquilinos/${inq.id}`} className="font-semibold text-primary hover:underline">{inq.nombre_completo}</Link> · Depto {inq.depto_numero}</>}
+        subtitle={<><Link to={`/inquilinos/${inq.id}`} className="font-semibold text-primary hover:underline">{nombreVisible(inq.nombre_completo)}</Link> · Depto {inq.depto_numero}</>}
         actions={<Button variant="secondary" className="h-10 px-4" icon={<Printer className="size-4" />} onClick={imprimir}>Recibo</Button>} />
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className="space-y-5">
           {/* Estado del periodo */}
           <Card className={`space-y-4 ${pago?.confirmado ? 'border-success/30 bg-success-soft' : ''}`}>

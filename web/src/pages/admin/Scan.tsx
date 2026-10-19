@@ -10,6 +10,7 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { useToast } from '../../components/ui/Toast'
 import { api } from '../../lib/api'
 import { money, num, periodoLabel } from '../../lib/format'
+import { nombreVisible } from '../../lib/nombre'
 
 const TOKEN_RX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
 type Stage = 'scan' | 'confirm' | 'done' | 'error'
@@ -173,7 +174,7 @@ export default function Scan() {
               </motion.span>
               <div><h2 className="text-xl font-extrabold">Confirmar pago en efectivo</h2><p className="text-sm text-fg-2">Verifica los datos antes de confirmar</p></div>
               <dl className="space-y-2 text-left text-sm">
-                <Fila k="Inquilino" v={pago.nombre_completo} /><Fila k="Departamento" v={`Depto ${pago.depto_numero}`} />
+                <Fila k="Inquilino" v={nombreVisible(pago.nombre_completo)} /><Fila k="Departamento" v={`Depto ${pago.depto_numero}`} />
                 <Fila k="Periodo" v={pago.periodo ? periodoLabel(pago.periodo) : '—'} />
                 <div className="flex items-center justify-between rounded-2xl bg-hover px-4 py-3">
                   <dt className="text-fg-2">Monto</dt>
@@ -199,7 +200,7 @@ export default function Scan() {
             <Card className="space-y-4 text-center">
               <SuccessCheck size={80} />
               <h2 className="text-xl font-extrabold">{pago.confirmado ? '¡Ya estaba pagado!' : '¡Pago confirmado!'}</h2>
-              <p className="text-sm text-fg-2">{pago.nombre_completo} · Depto {pago.depto_numero} · {money(pago.monto ?? pago.renta)}</p>
+              <p className="text-sm text-fg-2">{nombreVisible(pago.nombre_completo)} · Depto {pago.depto_numero} · {money(pago.monto ?? pago.renta)}</p>
               <Button full onClick={reset} icon={<ScanLine className="size-4" />}>Escanear otro</Button>
             </Card>
           </motion.div>

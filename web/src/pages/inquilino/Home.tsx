@@ -85,7 +85,7 @@ export default function InquilinoHome() {
     <div className="space-y-6">
       <ConfettiBurst active={celebrate} />
       {header}
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-5">
           {/* Departamento y renta */}
           <Card className="flex items-center gap-4 transition duration-200 hover:border-line-strong">

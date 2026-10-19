@@ -7,7 +7,7 @@ export function PermisosEditor({ value, preset, onChange }: { value: Permiso[]; 
   const toggle = (k: Permiso) => onChange(value.includes(k) ? value.filter(x => x !== k) : [...value, k], 'custom')
   return (
     <div className="space-y-4">
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         {PRESETS.map(p => (
           <button key={p.key} type="button" onClick={() => onChange([...p.permisos], p.key)}
             className={`rounded-xl border p-3 text-left transition ${preset === p.key ? 'border-primary bg-primary-soft' : 'border-line bg-card hover:bg-hover'}`}>

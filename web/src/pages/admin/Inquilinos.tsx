@@ -18,8 +18,11 @@ import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { iniciales, money, num } from '../../lib/format'
 import type { Inquilino } from '../../lib/types'
+import { useEstadosPago } from '../../lib/estadoPago'
+import type { RowState } from '../../lib/cobranza'
+import { nombreVisible } from '../../lib/nombre'
 
-type Tone = 'success' | 'warning' | 'danger' | 'primary'
+type Tone = 'success' | 'warning' | 'danger' | 'primary' | 'neutral'
 
 export function vencimiento(fecha?: string | null) {
   if (!fecha) return null
@@ -30,10 +33,17 @@ export function vencimiento(fecha?: string | null) {
   return { expired: false, label: `Vence en ${meses} mes${meses !== 1 ? 'es' : ''}`, tone: 'success' as Tone, short: null }
 }
 
-export function estadoChip(i: Pick<Inquilino, 'estado' | 'fecha_termino'>): { label: string; tone: Tone } {
+const PAGO_CHIP: Record<RowState, { label: string; tone: Tone }> = {
+  pagado: { label: 'Pagado', tone: 'success' }, revision: { label: 'En revisión', tone: 'warning' },
+  atrasado: { label: 'Atrasado', tone: 'danger' }, pendiente: { label: 'Por pagar', tone: 'neutral' },
+}
+
+/** Etiqueta de estado: el estado de PAGO del mes si se conoce; si no, solo "Activo" (no se afirma que esté al corriente). */
+export function estadoChip(i: Pick<Inquilino, 'estado' | 'fecha_termino'>, pago?: RowState): { label: string; tone: Tone } {
   if (i.estado !== 'activo') return { label: 'Archivado', tone: 'danger' }
+  if (pago) return PAGO_CHIP[pago]
   if (vencimiento(i.fecha_termino)?.expired) return { label: 'Contrato vencido', tone: 'danger' }
-  return { label: 'Al corriente', tone: 'success' }
+  return { label: 'Activo', tone: 'neutral' }
 }
 
 export default function Inquilinos() {
@@ -44,6 +54,7 @@ export default function Inquilinos() {
   const [search, setSearch] = useState('')
   const [baja, setBaja] = useState<Inquilino | null>(null)
   const puedeEditar = can('inquilinos.editar')
+  const pagos = useEstadosPago(can('pagos'))
 
   const { data = [], isLoading } = useQuery({ queryKey: ['inquilinos', estado], queryFn: async () => (await api.getInquilinos({ estado })).data })
 
@@ -116,7 +127,7 @@ export default function Inquilinos() {
             </thead>
             <tbody key={`${estado}-${search}`} className="divide-y divide-line">
               {filtered.map((i, idx) => {
-                const chip = estadoChip(i); const v = vencimiento(i.fecha_termino); const activo = i.estado === 'activo'
+                const chip = estadoChip(i, pagos?.get(i.id)); const v = vencimiento(i.fecha_termino); const activo = i.estado === 'activo'
                 return (
                   <motion.tr
                     key={i.id}
@@ -131,12 +142,12 @@ export default function Inquilinos() {
                           {iniciales(i.nombre_completo)}
                           <span className={`absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-card ${activo ? 'bg-success' : 'bg-muted'}`} />
                         </span>
-                        <span className="min-w-0"><span className="block truncate font-semibold">{i.nombre_completo}</span>{i.tel_arrendatario && <span className="text-xs text-muted">{i.tel_arrendatario}</span>}</span>
+                        <span className="min-w-0"><span className="block truncate font-semibold">{nombreVisible(i.nombre_completo)}</span>{i.tel_arrendatario && <span className="text-xs text-muted">{i.tel_arrendatario}</span>}</span>
                       </Link>
                     </td>
                     <td className="px-3 py-3 font-semibold">Depto {i.depto_numero}</td>
                     <td className="px-3 py-3"><span className="font-bold">{money(i.renta)}</span>{i.fecha_pago && <span className="block text-xs text-muted">Día {i.fecha_pago.match(/\d+/)?.[0] ?? i.fecha_pago}</span>}</td>
-                    <td className="px-3 py-3"><Badge tone={chip.tone}>{chip.label}</Badge>{v && !v.expired && <span className={`mt-1 block text-xs ${v.tone === 'warning' ? 'text-warning' : 'text-muted'}`}>{v.label}</span>}</td>
+                    <td className="px-3 py-3"><span className="flex flex-wrap gap-1.5"><Badge tone={chip.tone}>{chip.label}</Badge>{activo && v?.expired && <Badge tone="danger">Contrato vencido</Badge>}</span>{v && !v.expired && <span className={`mt-1 block text-xs ${v.tone === 'warning' ? 'text-warning' : 'text-muted'}`}>{v.label}</span>}</td>
                     <td className="px-5 py-3"><div className="flex justify-end gap-1"><Acciones i={i} activo={activo} puedeEditar={puedeEditar} onBaja={() => { darDeBaja.reset(); setBaja(i) }} /></div></td>
                   </motion.tr>
                 )
@@ -149,16 +160,16 @@ export default function Inquilinos() {
       {/* Tarjetas (móvil) */}
       <StaggerList key={`${estado}-${search}`} className="space-y-3 md:hidden">
         {filtered.map(i => {
-          const chip = estadoChip(i); const v = vencimiento(i.fecha_termino); const activo = i.estado === 'activo'
+          const chip = estadoChip(i, pagos?.get(i.id)); const v = vencimiento(i.fecha_termino); const activo = i.estado === 'activo'
           return (
             <StaggerItem key={i.id}>
               <Card className="p-0">
                 <Link to={`/inquilinos/${i.id}`} className="flex items-center gap-3 p-4">
                   <span className="grid size-11 shrink-0 place-items-center rounded-full bg-primary-soft text-sm font-bold text-primary">{iniciales(i.nombre_completo)}</span>
                   <span className="min-w-0 flex-1 space-y-1.5">
-                    <span className="block truncate font-bold">{i.nombre_completo}</span>
+                    <span className="block truncate font-bold">{nombreVisible(i.nombre_completo)}</span>
                     <span className="flex flex-wrap items-center gap-2"><Badge tone="primary">Depto {i.depto_numero}</Badge><span className="text-sm font-bold">{money(i.renta)}</span></span>
-                    <span className="flex flex-wrap gap-2"><Badge tone={chip.tone}>{chip.label}</Badge>{v?.short && <Badge tone={v.tone}>{v.short}</Badge>}</span>
+                    <span className="flex flex-wrap gap-2"><Badge tone={chip.tone}>{chip.label}</Badge>{v?.short && <Badge tone={v.tone}>{v.short}</Badge>}{activo && v?.expired && <Badge tone="danger">Contrato vencido</Badge>}</span>
                   </span>
                 </Link>
                 {puedeEditar && (
@@ -182,7 +193,7 @@ export default function Inquilinos() {
       <ConfirmDialog open={!!baja} title="Dar de baja" confirmLabel="Dar de baja" loading={darDeBaja.isPending}
         error={darDeBaja.error instanceof Error ? darDeBaja.error.message : null}
         onClose={() => setBaja(null)} onConfirm={() => baja && darDeBaja.mutate(baja.id)}>
-        <p>¿Dar de baja a <b className="text-fg">{baja?.nombre_completo}</b>? El Depto {baja?.depto_numero} quedará disponible.</p>
+        <p>¿Dar de baja a <b className="text-fg">{nombreVisible(baja?.nombre_completo)}</b>? El Depto {baja?.depto_numero} quedará disponible.</p>
         <p className="mt-2">Sus datos se guardarán en el historial y podrás generar un nuevo contrato en el futuro.</p>
       </ConfirmDialog>
     </StaggerList>

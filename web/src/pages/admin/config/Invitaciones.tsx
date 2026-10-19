@@ -38,7 +38,7 @@ export function Invitaciones() {
       {isLoading && <div className="grid place-items-center py-16"><Spinner className="size-8" /></div>}
       {!isLoading && data.length === 0 && <StaggerItem><Card><EmptyState icon={Ticket} title="Sin enlaces de invitación">Genera uno para invitar a un inquilino o colaborador.</EmptyState></Card></StaggerItem>}
       {data.length > 0 && (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {data.map(c => { const e = estadoDe(c); return (
             <StaggerItem key={c.id}>
               <Card className="space-y-2 p-4">

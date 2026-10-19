@@ -19,6 +19,7 @@ import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { money, num } from '../../lib/format'
 import type { Departamento } from '../../lib/types'
+import { nombreVisible } from '../../lib/nombre'
 
 export const ESTADO_DEPTO = {
   disponible: { label: 'Disponible', tone: 'success', bar: 'bg-success' },
@@ -95,7 +96,7 @@ export default function Departamentos() {
       )}
 
       {visibles.length > 0 && (
-        <StaggerList key={String(piso)} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <StaggerList key={String(piso)} className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {visibles.map(d => {
           const cfg = ESTADO_DEPTO[d.estado]
           const inv = d.inventario_base?.length ?? 0
@@ -114,7 +115,7 @@ export default function Departamentos() {
                   {d.descripcion && <p className="mt-1 line-clamp-1 text-sm text-fg-2">{d.descripcion}</p>}
                   <div className="mt-4 border-t border-line pt-3 text-sm">
                     {d.estado === 'ocupado' && d.inquilino_actual
-                      ? <div className="flex items-center justify-between gap-2"><span className="truncate font-semibold">{d.inquilino_actual.nombre}</span><span className="font-bold">{money(d.inquilino_actual.renta)}</span></div>
+                      ? <div className="flex items-center justify-between gap-2"><span className="truncate font-semibold">{nombreVisible(d.inquilino_actual.nombre)}</span><span className="font-bold">{money(d.inquilino_actual.renta)}</span></div>
                       : <span className="text-fg-2">{inv > 0 ? `${inv} artículo${inv !== 1 ? 's' : ''} en inventario` : 'Sin inventario'}</span>}
                   </div>
                 </Link>

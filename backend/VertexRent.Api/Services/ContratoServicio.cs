@@ -47,6 +47,13 @@ public static class ContratoServicio
         return new ContratoContexto(inq, depto, config, data);
     }
 
+    /// <summary>Huella del texto de una plantilla (ignora formato y espacios): detecta cambios reales de contenido.</summary>
+    public static string HashTexto(byte[] docx)
+    {
+        var texto = string.Join("\n", DocxService.ExtraerParrafos(docx).Select(p => System.Text.RegularExpressions.Regex.Replace(p.Texto, @"\s+", " ").Trim()));
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(texto))).ToLowerInvariant();
+    }
+
     public static PlantillaCargada Sistema() =>
         new(PlantillaSistema.Id, PlantillaSistema.Nombre, PlantillaSistema.Docx, new JsonArray(), true);
 

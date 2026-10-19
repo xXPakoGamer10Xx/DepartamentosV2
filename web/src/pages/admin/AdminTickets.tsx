@@ -18,6 +18,7 @@ import { api } from '../../lib/api'
 import { fechaHora } from '../../lib/format'
 import { useSSE } from '../../lib/sse'
 import type { Ticket } from '../../lib/types'
+import { nombreVisible } from '../../lib/nombre'
 
 type Estado = Ticket['estado']
 const E = {
@@ -74,7 +75,7 @@ export default function AdminTickets() {
         className={`relative w-full overflow-hidden rounded-2xl border bg-card p-4 pl-5 text-left transition hover:bg-hover ${selId === t.id ? 'border-primary ring-1 ring-primary/40' : 'border-line'}`}>
         <span className={`absolute inset-y-0 left-0 w-1.5 ${cfg.bar}`} />
         <div className="flex items-start justify-between gap-2"><p className="font-bold leading-tight">{t.titulo}</p><Badge tone={cfg.tone}>{cfg.label}</Badge></div>
-        <p className="mt-0.5 text-xs text-fg-2">{t.inquilino_nombre} · Depto {t.depto_numero}</p>
+        <p className="mt-0.5 text-xs text-fg-2">{nombreVisible(t.inquilino_nombre)} · Depto {t.depto_numero}</p>
         <p className="mt-1 line-clamp-2 text-sm text-fg-2">{t.descripcion}</p>
         <p className="mt-2 text-[11px] text-muted">{fechaHora(t.created_at)}</p>
       </button>
@@ -84,7 +85,7 @@ export default function AdminTickets() {
   const detalle = sel && (
     <Card className="space-y-4">
       <div className="flex items-start justify-between gap-3">
-        <div><h2 className="text-lg font-extrabold leading-tight">{sel.titulo}</h2><p className="text-sm text-fg-2">{sel.inquilino_nombre} · Depto {sel.depto_numero} · {fechaHora(sel.created_at)}</p></div>
+        <div><h2 className="text-lg font-extrabold leading-tight">{sel.titulo}</h2><p className="text-sm text-fg-2">{nombreVisible(sel.inquilino_nombre)} · Depto {sel.depto_numero} · {fechaHora(sel.created_at)}</p></div>
         <Badge tone={E[sel.estado].tone}>{E[sel.estado].label}</Badge>
       </div>
       <p className="whitespace-pre-wrap rounded-xl bg-hover p-4 text-sm">{sel.descripcion}</p>
@@ -136,7 +137,7 @@ export default function AdminTickets() {
             </StaggerItem>
           )}
           {filtrados.length > 0 && (
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
               <div key={filtro} className="space-y-3">
                 {filtrados.map(t => (
                   <StaggerItem key={t.id}>
@@ -179,12 +180,12 @@ export default function AdminTickets() {
               <Card><EmptyState icon={MessageSquare} title="Sin tickets en este mes" /></Card>
             </StaggerItem>
           )}
-          <div key={mes} className="grid gap-3 md:grid-cols-2">
+          <div key={mes} className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {hist.data?.map(t => (
               <StaggerItem key={t.id}>
                 <Card className="space-y-2">
                   <div className="flex items-start justify-between gap-2"><p className="font-bold">{t.titulo}</p><Badge tone={E[t.estado].tone}>{E[t.estado].label}</Badge></div>
-                  <p className="text-xs text-fg-2">{t.inquilino_nombre} · Depto {t.depto_numero} · {fechaHora(t.created_at)}</p>
+                  <p className="text-xs text-fg-2">{nombreVisible(t.inquilino_nombre)} · Depto {t.depto_numero} · {fechaHora(t.created_at)}</p>
                   <p className="text-sm text-fg-2">{t.descripcion}</p>
                   {t.nota_admin && <p className="rounded-xl bg-primary-soft p-3 text-xs">{t.nota_admin}</p>}
                   <div className="flex justify-end"><Button variant="ghost" className="h-8 px-3 text-danger" icon={<Trash2 className="size-4" />} onClick={() => { eliminar.reset(); setBorrar(t) }}>Eliminar</Button></div>

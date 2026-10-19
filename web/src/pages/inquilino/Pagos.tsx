@@ -55,7 +55,7 @@ export default function InquilinoPagos() {
       )}
 
       {pagos && pagos.length > 0 && (
-        <StaggerList className="grid gap-3 md:grid-cols-2">
+        <StaggerList className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {pagos.map(p => {
             const estado = !p.confirmado
               ? { tone: 'neutral' as const, label: 'Pendiente', bar: 'bg-muted', icon: <CircleDashed className="size-3" /> }

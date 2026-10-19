@@ -52,12 +52,12 @@ export function General() {
   const usaApp = c.usa_qr_inquilinos !== 'false'
 
   return (
-    <StaggerList className="grid items-start gap-5 lg:grid-cols-2">
+    <StaggerList className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
       <div className="space-y-5">
       <Sec titulo="Tu perfil" desc="Los datos con los que inicias sesión." icon={<UserRound className="size-4" />}
         acciones={<><Button variant="secondary" icon={<KeyRound className="size-4" />} onClick={() => setPwd(true)}>Cambiar contraseña</Button>
           <Button loading={perfil.isPending} disabled={!nombre.trim() || nombre.trim() === user?.nombre_completo} onClick={() => perfil.mutate()}>Guardar perfil</Button></>}>
-        <div className="grid gap-4 2xl:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
           <Input label="Nombre completo" hint="Así apareces en el sistema." value={nombre} onChange={e => setNombre(e.target.value)} />
           <Input label="Correo" hint="Tu usuario para iniciar sesión (no se puede cambiar)." value={user?.email ?? ''} disabled />
         </div>
@@ -65,7 +65,7 @@ export function General() {
 
       <Sec titulo="Datos del arrendador" desc="Aparecen en recibos y en tus contratos." icon={<UserRound className="size-4" />}
         acciones={<Button loading={guardar.isPending} onClick={() => guardar.mutate({ arrendador_nombre: arr.nombre.trim(), arrendador_direccion: arr.direccion.trim(), arrendador_rfc: arr.rfc.trim().toUpperCase(), arrendador_telefono: arr.telefono.trim() })}>Guardar datos</Button>}>
-        <div className="grid gap-4 2xl:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
           <Input label="Nombre del arrendador" hint="Persona o empresa que recibe las rentas." maxLength={100} value={arr.nombre} onChange={e => setArr({ ...arr, nombre: e.target.value })} />
           <Input label="Dirección de la propiedad" hint="Domicilio principal del inmueble." maxLength={200} value={arr.direccion} onChange={e => setArr({ ...arr, direccion: e.target.value })} />
           <Input label="RFC" hint="Opcional. Algunos contratos lo piden." maxLength={13} value={arr.rfc} onChange={e => setArr({ ...arr, rfc: e.target.value.toUpperCase() })} />
@@ -82,7 +82,7 @@ export function General() {
         <fieldset className="space-y-2">
           <legend className="text-xs font-bold uppercase tracking-wide text-fg-2">Modo de uso</legend>
           <p className="text-xs text-muted">Elige si tus inquilinos entrarán a la plataforma. Se aplica al instante.</p>
-          <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Modo de uso">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Modo de uso">
             {([
               { v: true, t: 'Con inquilinos', d: 'Tus inquilinos entran a la app: ven su renta, pagan con QR, envían comprobantes y abren tickets.' },
               { v: false, t: 'Uso interno', d: 'Solo tú y tu equipo cobran y llevan el control. Se ocultan QR, Comprobantes y Tickets.' },
@@ -99,7 +99,7 @@ export function General() {
             ))}
           </div>
         </fieldset>
-        <div className="grid gap-4 2xl:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
           {usaApp && <Input label="URL pública de la app" hint="Dirección que verán tus inquilinos (se usa en los QR y avisos)." placeholder="https://tuapp.com" value={arr.url} onChange={e => setArr({ ...arr, url: e.target.value })} />}
           <Input label="Días de gracia" hint="Días después del vencimiento antes de marcar atraso." type="number" min={0} max={90} value={arr.gracia} onChange={e => setArr({ ...arr, gracia: e.target.value.slice(0, 2) })} />
         </div>

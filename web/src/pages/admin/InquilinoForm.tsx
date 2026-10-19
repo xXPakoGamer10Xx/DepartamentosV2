@@ -188,7 +188,7 @@ function Formulario({ editId, initial, editando, desde, initialObsEdited }: { ed
         </Card>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className="space-y-5">
           <Seccion titulo="Datos del arrendatario" icon={<User className="size-4" />}>
             <Input label="Nombre completo *" icon={<User />} placeholder="Ej. Juan Pérez García" value={f.nombre} onChange={e => set('nombre', e.target.value)} />
@@ -200,7 +200,7 @@ function Formulario({ editId, initial, editando, desde, initialObsEdited }: { ed
           </Seccion>
 
           <Seccion titulo="Obligado solidario / fiador (opcional)" icon={<Users className="size-4" />}>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Input label="Nombre del fiador" placeholder="Ej. María López" value={f.fiador} onChange={e => set('fiador', e.target.value)} />
               <Input label="Teléfono del fiador" inputMode="tel" placeholder="10 dígitos" maxLength={10} value={f.telFiador} onChange={e => set('telFiador', digits(e.target.value))} />
             </div>
@@ -213,7 +213,7 @@ function Formulario({ editId, initial, editando, desde, initialObsEdited }: { ed
 
         <div className="space-y-5">
           <Seccion titulo="Condiciones financieras" icon={<Wallet className="size-4" />}>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Input label="Renta mensual *" inputMode="numeric" placeholder="3500" value={f.renta} onChange={e => setRenta(e.target.value)} />
               <Input label="Depósito *" inputMode="numeric" placeholder="3500" value={f.deposito} onChange={e => { setDepositoManual(true); set('deposito', digits(e.target.value)) }} />
             </div>
@@ -227,7 +227,7 @@ function Formulario({ editId, initial, editando, desde, initialObsEdited }: { ed
           </Seccion>
 
           <Seccion titulo="Vigencia del contrato" icon={<CalendarDays className="size-4" />}>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Input label="Fecha de inicio *" type="date" value={f.inicio} onChange={e => setInicio(e.target.value)} />
               <Input label="Fecha de término *" type="date" value={f.termino} onChange={e => set('termino', e.target.value)} />
             </div>
@@ -240,7 +240,7 @@ function Formulario({ editId, initial, editando, desde, initialObsEdited }: { ed
               <option value="personalizado">En pagos mensuales</option>
             </Select>
             {f.depTipo === 'personalizado' && (
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Input label="Día del mes" type="number" min={1} max={31} value={f.depDia}
                   onChange={e => setF(s => recalcDeposito(s, 'personalizado', s.inicio, e.target.value.slice(0, 2), s.depPagos))} />
                 <Select label="Número de pagos" value={f.depPagos} onChange={e => setF(s => recalcDeposito(s, 'personalizado', s.inicio, s.depDia, Number(e.target.value)))}>

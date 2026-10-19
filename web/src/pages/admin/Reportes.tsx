@@ -68,9 +68,9 @@ export default function Reportes() {
 
       {cargando && <div className="grid place-items-center py-16"><Spinner className="size-8" /></div>}
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         {/* Gráfica de barras apiladas */}
-        <StaggerItem>
+        <StaggerItem className="min-w-0">
           <Card className="h-full">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <h2 className="font-bold">Ingresos por mes</h2>
@@ -135,7 +135,7 @@ export default function Reportes() {
         </StaggerItem>
 
         {/* Panel lateral */}
-        <div className="space-y-5">
+        <div className="min-w-0 space-y-5">
           {can('departamentos') && (
             <StaggerItem>
               <Card className="flex items-center gap-5">

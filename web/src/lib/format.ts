@@ -1,3 +1,4 @@
+import { nombreVisible } from './nombre'
 /** NUMERIC de Postgres llega como string. */
 export const num = (v: string | number | null | undefined): number => {
   const n = typeof v === 'number' ? v : parseFloat(v ?? '')
@@ -30,7 +31,7 @@ export function haceCuanto(v: string): string {
 }
 
 export const iniciales = (nombre: string) =>
-  nombre.split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase()
+  nombreVisible(nombre).split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase()
 
 /** "2026-10" → "octubre de 2026". */
 export function periodoLabel(periodo: string): string {

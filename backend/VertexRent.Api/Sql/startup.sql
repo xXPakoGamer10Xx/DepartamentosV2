@@ -272,6 +272,8 @@ ALTER TABLE contratos ADD COLUMN IF NOT EXISTS docx             BYTEA;
 ALTER TABLE contratos ADD COLUMN IF NOT EXISTS pdf              BYTEA;
 ALTER TABLE contratos ADD COLUMN IF NOT EXISTS valores_extra    JSONB NOT NULL DEFAULT '{}';
 ALTER TABLE contratos ADD COLUMN IF NOT EXISTS aproximado       BOOLEAN NOT NULL DEFAULT FALSE;
+-- Huella del TEXTO de la plantilla usada: si cambia, el contrato generado quedó desactualizado.
+ALTER TABLE contratos ADD COLUMN IF NOT EXISTS plantilla_hash   VARCHAR(64);
 CREATE INDEX IF NOT EXISTS idx_contratos_inquilino ON contratos(inquilino_id);
 CREATE INDEX IF NOT EXISTS idx_contratos_admin_inquilino ON contratos(admin_id, inquilino_id);
 
