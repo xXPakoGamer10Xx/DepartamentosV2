@@ -242,7 +242,6 @@ export default function Pagos() {
         {visibles.map(({ i, state }) => {
           const e = estados.get(i.id); const s = saldos.get(i.id); const chip = CHIP[state]
           const monto = montoDeCard(tab, num(i.renta), s)
-          const monto = montoDeCard(tab, i.renta, s)
           const transfer = i.metodo_pago === 'transferencia' || i.metodo_pago === 'ambos'
           const busy = (marcar.isPending && marcar.variables?.id === i.id) || (validar.isPending && validar.variables === e?.pago_id)
           return (
