@@ -20,7 +20,7 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(payload.title || 'NethRent', {
       body: payload.body || '',
       icon: '/icons/icon-192x192.png',
-      badge: '/icons/favicon-32x32.png',
+      badge: '/icons/badge-96x96.png',
       data: payload.data || {},
     }),
   )
