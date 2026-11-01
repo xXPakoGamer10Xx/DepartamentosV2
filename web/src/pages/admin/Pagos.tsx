@@ -23,6 +23,17 @@ import { useSSE } from '../../lib/sse'
 import type { Inquilino } from '../../lib/types'
 import { nombreVisible } from '../../lib/nombre'
 
+/** Monto grande de la card según el filtro activo, para que el número coincida con lo que se está viendo. */
+function montoDeCard(tab: string, renta: number, s?: Saldo): { valor: number; caption: string; tone: string } {
+  if (s) {
+    if (tab === 'atrasados') return { valor: s.vencida, caption: 'Debe de renta', tone: 'text-danger' }
+    if (tab === 'cuotas_extra') return { valor: s.cuotasExtra, caption: 'Cuota extra', tone: 'text-warning' }
+    if (tab === 'deposito') return { valor: s.deposito, caption: 'Falta de depósito', tone: 'text-primary' }
+    if (tab === 'pendientes') return { valor: s.total, caption: 'Por pagar', tone: '' }
+  }
+  return { valor: renta, caption: 'Renta', tone: '' }
+}
+
 type Tab = 'todos' | 'pagados' | 'revision' | 'pendientes' | 'atrasados' | 'cuotas_extra' | 'deposito'
 type Sort = 'depto' | 'dia_asc' | 'dia_desc' | 'monto_desc' | 'monto_asc' | 'nombre'
 const SORTS: { key: Sort; label: string }[] = [
@@ -230,6 +241,8 @@ export default function Pagos() {
         <StaggerList key={`${tab}-${sort}`} className="space-y-3">
         {visibles.map(({ i, state }) => {
           const e = estados.get(i.id); const s = saldos.get(i.id); const chip = CHIP[state]
+          const monto = montoDeCard(tab, num(i.renta), s)
+          const monto = montoDeCard(tab, i.renta, s)
           const transfer = i.metodo_pago === 'transferencia' || i.metodo_pago === 'ambos'
           const busy = (marcar.isPending && marcar.variables?.id === i.id) || (validar.isPending && validar.variables === e?.pago_id)
           return (
@@ -244,12 +257,14 @@ export default function Pagos() {
                 </Link>
 
                 <div className="flex w-full items-start justify-between gap-3 sm:block sm:w-auto sm:min-w-28 sm:text-right">
-                  <div className="order-2 text-right sm:order-none"><p className="font-extrabold">{money(i.renta)}</p></div>
+                  <div className="order-2 text-right sm:order-none">
+                    <p className={`font-extrabold ${monto.tone}`}>{money(monto.valor)}</p>
+                    {monto.caption && <p className="text-[11px] font-medium text-fg-2">{monto.caption}</p>}
+                  </div>
                   <div className="order-1 min-w-0 flex-1 text-left sm:order-none sm:text-right">
-                  {state === 'atrasado' && s && s.vencida > EPS && <p className="text-xs font-semibold text-danger">Debe {money(s.vencida)}{s.periodoVencido ? ` · desde ${periodoLabel(s.periodoVencido)}` : ''}</p>}
-                  {s && s.cuotasExtra > EPS && <p className="text-xs font-semibold text-warning">+ Extra aparte {money(s.cuotasExtra)}</p>}
-                  {tab === 'deposito' && s && <p className="text-xs font-semibold text-primary">Falta {money(s.deposito)}</p>}
-                  {state === 'pendiente' && num(e?.total_abonado) > 0 && <p className="text-xs text-fg-2">Abonado {money(e?.total_abonado)}</p>}
+                  {state === 'atrasado' && s && s.vencida > EPS && <p className="text-xs font-semibold text-danger">{tab === 'atrasados' ? 'Renta atrasada' : `Debe ${money(s.vencida)}`}{s.periodoVencido ? ` · desde ${periodoLabel(s.periodoVencido)}` : ''}</p>}
+                  {tab !== 'cuotas_extra' && s && s.cuotasExtra > EPS && <p className="text-xs font-semibold text-warning">+ Extra aparte {money(s.cuotasExtra)}</p>}
+                                    {state === 'pendiente' && num(e?.total_abonado) > 0 && <p className="text-xs text-fg-2">Abonado {money(e?.total_abonado)}</p>}
                   </div>
                 </div>
 
