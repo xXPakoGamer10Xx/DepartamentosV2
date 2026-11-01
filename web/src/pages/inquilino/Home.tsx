@@ -169,7 +169,7 @@ export default function InquilinoHome() {
                 ))}
               </ul>
               <div className="mt-3 flex justify-between border-t border-danger/25 pt-3 font-extrabold">
-                <span>Total a pagar</span><span><AnimatedNumber value={num(inq.renta) + totalExtra} format={money} /></span>
+                <span>Total cargos extra (aparte de la renta)</span><span><AnimatedNumber value={totalExtra} format={money} /></span>
               </div>
             </Card>
           )}

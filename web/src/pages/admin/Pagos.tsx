@@ -235,7 +235,7 @@ export default function Pagos() {
           return (
             <StaggerItem key={i.id} layout>
               <Card className="flex flex-wrap items-center gap-x-5 gap-y-3 p-4 transition duration-200 hover:border-line-strong hover:shadow-md">
-                <Link to={`/pagos/${i.id}`} className="flex min-w-56 flex-1 items-center gap-3">
+                <Link to={`/pagos/${i.id}`} className="flex w-full min-w-0 items-center gap-3 sm:w-auto sm:min-w-56 sm:flex-1">
                   <span className="grid size-11 shrink-0 place-items-center rounded-full bg-primary-soft text-sm font-bold text-primary">{iniciales(i.nombre_completo)}</span>
                   <span className="min-w-0">
                     <span className="block truncate font-bold">{nombreVisible(i.nombre_completo)}</span>
@@ -243,21 +243,23 @@ export default function Pagos() {
                   </span>
                 </Link>
 
-                <div className="min-w-28 text-right">
-                  <p className="font-extrabold">{money(i.renta)}</p>
+                <div className="flex w-full items-start justify-between gap-3 sm:block sm:w-auto sm:min-w-28 sm:text-right">
+                  <div className="order-2 text-right sm:order-none"><p className="font-extrabold">{money(i.renta)}</p></div>
+                  <div className="order-1 min-w-0 flex-1 text-left sm:order-none sm:text-right">
                   {state === 'atrasado' && s && s.vencida > EPS && <p className="text-xs font-semibold text-danger">Debe {money(s.vencida)}{s.periodoVencido ? ` · desde ${periodoLabel(s.periodoVencido)}` : ''}</p>}
-                  {tab === 'cuotas_extra' && s && <p className="text-xs font-semibold text-warning">Extras {money(s.cuotasExtra)}</p>}
+                  {s && s.cuotasExtra > EPS && <p className="text-xs font-semibold text-warning">+ Extra aparte {money(s.cuotasExtra)}</p>}
                   {tab === 'deposito' && s && <p className="text-xs font-semibold text-primary">Falta {money(s.deposito)}</p>}
                   {state === 'pendiente' && num(e?.total_abonado) > 0 && <p className="text-xs text-fg-2">Abonado {money(e?.total_abonado)}</p>}
+                  </div>
                 </div>
 
-                <div className="w-28 text-center"><Badge tone={chip.tone}>{chip.label}</Badge></div>
+                <div className="sm:w-28 sm:text-center"><Badge tone={chip.tone}>{chip.label}</Badge></div>
 
-                <div className="flex min-w-44 justify-end gap-2">
+                <div className="flex w-full gap-2 [&>*]:flex-1 sm:w-auto sm:min-w-44 sm:justify-end sm:[&>*]:flex-none">
                   {puedeMarcar && state === 'revision' && e?.pago_id && <Button className="h-9 px-3" loading={busy} icon={<CheckCircle2 className="size-4" />} onClick={() => validar.mutate(e.pago_id!)}>Validar</Button>}
                   {puedeMarcar && (state === 'pendiente' || state === 'atrasado') && <Button variant="secondary" className="h-9 px-3" loading={busy} icon={<Banknote className="size-4" />} onClick={() => marcar.mutate(i)}>Marcar pagado</Button>}
                   {puedeMarcar && state === 'pagado' && puedeCancelar(e) && <Button variant="ghost" className="h-9 px-3 text-danger" icon={<Undo2 className="size-4" />} onClick={() => { cancelarPago.reset(); setCancelar({ pagoId: e!.pago_id!, nombre: nombreVisible(i.nombre_completo) }) }}>Cancelar</Button>}
-                  <Link to={`/pagos/${i.id}`}><Button variant="ghost" className="h-9 px-3" icon={<Landmark className="size-4" />}>Detalle</Button></Link>
+                  <Link to={`/pagos/${i.id}`}><Button variant="ghost" className="h-9 w-full px-3 sm:w-auto" icon={<Landmark className="size-4" />}>Detalle</Button></Link>
                 </div>
               </Card>
             </StaggerItem>

@@ -48,12 +48,6 @@ public static class CuotasEndpoints
             "INSERT INTO cuotas_extra (inquilino_id, concepto, monto, periodo, creado_por) VALUES ($1, $2, $3, $4, $5) RETURNING *",
             b["inquilino_id"], concepto, monto, periodo, u.Actor);
 
-        // Sumar el cargo al pago del periodo (si existe sin confirmar) para mantener el total consistente.
-        var pagoRes = await Db.Query(
-            "UPDATE pagos SET monto = monto + $1 WHERE inquilino_id = $2 AND periodo = $3 AND confirmado = false RETURNING id",
-            monto, b["inquilino_id"], periodo);
-        if (pagoRes.First != null) await SaldoService.RecalcularPago(pagoRes.First.S("id")!);
-
         var usuarioId = inquilino.S("usuario_id");
         if (!string.IsNullOrEmpty(usuarioId))
             await PushService.CreateAndSendNotification(usuarioId, "🔔 Nuevo cargo adicional",
@@ -69,12 +63,7 @@ public static class CuotasEndpoints
               USING inquilinos i
               WHERE c.id = $1 AND c.inquilino_id = i.id AND i.admin_id = $2 AND c.estado = 'pendiente'
               RETURNING c.id, c.inquilino_id, c.periodo, c.monto", Api.Route(c, "id"), c.Me().Id);
-        var cuota = r.First ?? throw new AppError("Cuota no encontrada o ya fue pagada", 404);
-
-        var pagoRes = await Db.Query(
-            "UPDATE pagos SET monto = GREATEST(monto - $1, 0) WHERE inquilino_id = $2 AND periodo = $3 AND confirmado = false RETURNING id",
-            cuota.S("monto"), cuota.S("inquilino_id"), cuota.S("periodo"));
-        if (pagoRes.First != null) await SaldoService.RecalcularPago(pagoRes.First.S("id")!);
+        if (r.First == null) throw new AppError("Cuota no encontrada o ya fue pagada", 404);
 
         return Api.Ok();
     }
@@ -89,21 +78,8 @@ public static class CuotasEndpoints
               WHERE c.id = $1 AND i.admin_id = $2 AND c.estado = 'pendiente'", Api.Route(c, "id"), u.Id);
         var cuota = cuotaRes.First ?? throw new AppError("Cargo no encontrado o ya fue pagado", 404);
 
-        var inquilino = (await Db.Query("SELECT * FROM inquilinos WHERE id = $1", cuota.S("inquilino_id"))).First!;
-
-        var pagoSel = await Db.Query("SELECT * FROM pagos WHERE inquilino_id = $1 AND periodo = $2", cuota.S("inquilino_id"), cuota.S("periodo"));
-        var pago = pagoSel.First ?? await PagosEndpoints.GetOrCrearPago(inquilino, cuota.S("periodo")!);
-
-        var metodo = string.IsNullOrEmpty(inquilino.S("metodo_pago")) ? "efectivo" : inquilino.S("metodo_pago");
-        await Db.Query("INSERT INTO abonos_pago (pago_id, monto, metodo, nota, registrado_por) VALUES ($1, $2, $3, $4, $5)",
-            pago.S("id"), cuota.S("monto"), metodo, $"Cargo pagado: {cuota.S("concepto")}", u.Id);
+        // La cuota extra se liquida por separado: no genera abonos sobre la renta del mes.
         await Db.Query("UPDATE cuotas_extra SET estado = 'pagado', pagado_en = NOW() WHERE id = $1", cuota.S("id"));
-
-        var rec = await SaldoService.RecalcularPago(pago.S("id")!);
-        return Api.Data(new Dictionary<string, object?>
-        {
-            ["pago"] = rec.Pago, ["totalAbonado"] = (double)rec.TotalAbonado,
-            ["completo"] = rec.Completo, ["saldoPendiente"] = (double)rec.SaldoPendiente,
-        });
+        return Api.Data(new Dictionary<string, object?> { ["cuota_id"] = cuota.S("id"), ["estado"] = "pagado" });
     }
 }

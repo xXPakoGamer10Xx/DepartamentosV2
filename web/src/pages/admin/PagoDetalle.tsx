@@ -42,7 +42,6 @@ export default function PagoDetalle() {
   const [abonoModal, setAbonoModal] = useState<{ tipo: 'renta' | 'deposito'; abono?: Abono } | null>(null)
   const [rechazar, setRechazar] = useState(false)
   const [cuotaModal, setCuotaModal] = useState(false)
-  const [choice, setChoice] = useState(false)
   const [cancelar, setCancelar] = useState(false)
   const [verComprobante, setVerComprobante] = useState(false)
   const [histAbierto, setHistAbierto] = useState(false)
@@ -103,7 +102,7 @@ export default function PagoDetalle() {
       periodoLabel: new Date().toLocaleDateString('es-MX', { month: 'long', year: 'numeric' }).toUpperCase(), renta: rentaBase,
       cargosExtra: cuotasPend.map(c => ({ concepto: c.concepto, monto: num(c.monto) })),
       abonosRenta: (abonosQ.data ?? []).map(a => ({ monto: num(a.monto), fecha: a.fecha })),
-      saldoRentaPendiente: pago?.confirmado ? 0 : pago ? saldoPend : rentaBase + (estadoQ.data?.total_extra ?? 0),
+      saldoRentaPendiente: pago?.confirmado ? 0 : pago ? saldoPend : rentaBase,
       depositoPendiente: dep?.deposito_saldo ?? 0,
     })
     if (!imprimirHtml(html)) toast('El navegador bloqueó la ventana. Permite las ventanas emergentes para imprimir.', 'error')
@@ -126,7 +125,7 @@ export default function PagoDetalle() {
                 <p className="text-lg font-extrabold">{pago?.confirmado ? 'Pago confirmado' : enRevision ? 'Comprobante en revisión' : pago?.rechazado ? 'Comprobante rechazado' : pago ? 'Pago pendiente' : 'Sin registro de pago'}</p>
                 {pago?.confirmado && pago.confirmado_en && <p className="text-xs text-fg-2">{fechaHora(pago.confirmado_en)}</p>}
               </div>
-              <p className="text-2xl font-extrabold">{money(pago ? monto : num(inq.renta) + (estadoQ.data?.total_extra ?? 0))}</p>
+              <p className="text-2xl font-extrabold">{money(pago ? monto : num(inq.renta))}</p>
             </div>
 
             {parcial && (
@@ -136,11 +135,11 @@ export default function PagoDetalle() {
               </div>
             )}
             {pago?.rechazado && !pago.confirmado && <p className="rounded-xl bg-danger-soft p-3 text-sm text-danger"><b>Rechazado:</b> {pago.comentario_admin || 'sin comentario'}</p>}
-            {cuotasPend.length > 0 && !pago?.confirmado && <p className="text-xs text-fg-2">Incluye {cuotasPend.length} cargo{cuotasPend.length > 1 ? 's' : ''} extra ({money(estadoQ.data?.total_extra)}).</p>}
+            {cuotasPend.length > 0 && !pago?.confirmado && <p className="text-xs font-semibold text-warning">Aparte de la renta: {cuotasPend.length} cargo{cuotasPend.length > 1 ? 's' : ''} extra pendiente{cuotasPend.length > 1 ? 's' : ''} ({money(estadoQ.data?.total_extra)}). Se cobran en "Cargos extra".</p>}
 
             {puedeMarcar && (
               <div className="flex flex-wrap gap-2">
-                {!pago?.confirmado && <Button loading={marcar.isPending} icon={<Banknote className="size-4" />} onClick={() => (cuotasPend.length ? setChoice(true) : marcar.mutate(false))}>Marcar pagado</Button>}
+                {!pago?.confirmado && <Button loading={marcar.isPending} icon={<Banknote className="size-4" />} onClick={() => marcar.mutate(false)}>Marcar renta pagada</Button>}
                 {!pago?.confirmado && <Button variant="secondary" icon={<HandCoins className="size-4" />} onClick={() => setAbonoModal({ tipo: 'renta' })}>Registrar abono</Button>}
                 {pago?.confirmado && puedeCancelar(est) && <Button variant="ghost" className="text-danger" icon={<Undo2 className="size-4" />} onClick={() => { cancelarPago.reset(); setCancelar(true) }}>Cancelar pago</Button>}
               </div>
@@ -298,13 +297,6 @@ export default function PagoDetalle() {
       <RechazarModal open={rechazar} pagoId={pago?.id} onClose={() => setRechazar(false)} onDone={() => { setRechazar(false); refresh() }} />
       <CuotaModal open={cuotaModal} inquilinoId={id} onClose={() => setCuotaModal(false)} onSaved={() => { setCuotaModal(false); refresh() }} />
 
-      <Modal open={choice} title="Marcar como pagado" onClose={() => setChoice(false)}>
-        <div className="space-y-3">
-          <p className="text-sm text-fg-2">Hay {cuotasPend.length} cargo(s) extra pendiente(s) por {money(estadoQ.data?.total_extra)}. ¿Qué cobraste?</p>
-          <Button full icon={<Banknote className="size-4" />} onClick={() => { setChoice(false); marcar.mutate(false) }}>Todo: renta + cargos extra</Button>
-          <Button full variant="secondary" onClick={() => { setChoice(false); marcar.mutate(true) }}>Solo la renta (los cargos quedan pendientes)</Button>
-        </div>
-      </Modal>
       <ConfirmDialog open={cancelar} title="Cancelar pago" confirmLabel="Cancelar pago" loading={cancelarPago.isPending} error={cancelarPago.error instanceof Error ? cancelarPago.error.message : null}
         onClose={() => setCancelar(false)} onConfirm={() => cancelarPago.mutate()}><p>El periodo volverá a quedar como pendiente y se eliminarán sus abonos.</p></ConfirmDialog>
       <Modal open={verComprobante} title="Comprobante de pago" onClose={() => setVerComprobante(false)}>

@@ -6,7 +6,7 @@ public static class SaldoService
 {
     /// <summary>
     /// Recalcula el estado de un pago (periodo) a partir de la suma de sus abonos:
-    /// transición pendiente/parcial/pagado y marcado de cuotas extra del mismo periodo.
+    /// transición pendiente/parcial/pagado (solo renta; las cuotas extra se cobran aparte).
     /// </summary>
     public static async Task<RecalculoPago> RecalcularPago(string pagoId)
     {
@@ -21,10 +21,6 @@ public static class SaldoService
         if (completo && !pago.B("confirmado"))
         {
             await Db.Query("UPDATE pagos SET confirmado = true, confirmado_en = NOW() WHERE id = $1", pagoId);
-            await Db.Query(
-                @"UPDATE cuotas_extra SET estado = 'pagado', pagado_en = NOW()
-                  WHERE inquilino_id = $1 AND periodo = $2 AND estado = 'pendiente'",
-                pago.S("inquilino_id"), pago.S("periodo"));
         }
         else if (!completo && pago.B("confirmado"))
         {

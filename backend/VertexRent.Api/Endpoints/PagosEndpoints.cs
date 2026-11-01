@@ -41,19 +41,16 @@ public static class PagosEndpoints
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
-    static async Task<decimal> TotalExtraPendiente(string inquilinoId) =>
-        (await Db.Query("SELECT COALESCE(SUM(monto), 0) as total_extra FROM cuotas_extra WHERE inquilino_id = $1 AND estado = 'pendiente'", inquilinoId)).First!.D("total_extra");
-
     static async Task<decimal> TotalAbonado(string pagoId) =>
         (await Db.Query("SELECT COALESCE(SUM(monto), 0) AS total FROM abonos_pago WHERE pago_id = $1", pagoId)).First!.D("total");
 
-    /// <summary>Obtiene (o crea) el pago de un periodo con monto = renta + cuotas extra pendientes.</summary>
+    /// <summary>Obtiene (o crea) el pago de un periodo con monto = solo renta (las cuotas extra se cobran aparte).</summary>
     public static async Task<Row> GetOrCrearPago(Row inquilino, string periodo)
     {
         var existing = await Db.Query("SELECT * FROM pagos WHERE inquilino_id = $1 AND periodo = $2", inquilino.S("id"), periodo);
         if (existing.First != null) return existing.First;
 
-        var montoTotal = inquilino.D("renta") + await TotalExtraPendiente(inquilino.S("id")!);
+        var montoTotal = inquilino.D("renta");
         var ins = await Db.Query(
             "INSERT INTO pagos (inquilino_id, periodo, monto, metodo) VALUES ($1, $2, $3, $4) RETURNING *",
             inquilino.S("id"), periodo, montoTotal, Js.T(JsonValue.Create(inquilino.S("metodo_pago"))) ? inquilino.S("metodo_pago") : "efectivo");
@@ -86,7 +83,7 @@ public static class PagosEndpoints
               FROM cuotas_extra WHERE inquilino_id = $1 AND estado = 'pendiente'", inquilinoId);
         var totalExtra = cuotasRes.First!.D("total_extra");
         var cuotasDetalle = cuotasRes.First.J("cuotas") ?? new JsonArray();
-        var montoTotal = inquilino.D("renta") + totalExtra;
+        var montoTotal = inquilino.D("renta"); // las cuotas extra se cobran aparte
 
         var pagoRes = await Db.Query("SELECT * FROM pagos WHERE inquilino_id = $1 AND periodo = $2", inquilinoId, periodo);
         Row pago;
@@ -223,7 +220,7 @@ public static class PagosEndpoints
         if (pagoRes.First == null)
         {
             var inq = (await Db.Query("SELECT renta, metodo_pago FROM inquilinos WHERE id = $1", inquilinoId)).First!;
-            var montoTotal = inq.D("renta") + await TotalExtraPendiente(inquilinoId);
+            var montoTotal = inq.D("renta");
             pago = (await Db.Query(
                 "INSERT INTO pagos (inquilino_id, periodo, monto, metodo) VALUES ($1, $2, $3, $4) RETURNING *",
                 inquilinoId, periodo, montoTotal, "transferencia")).First!;
@@ -361,7 +358,7 @@ public static class PagosEndpoints
         Row pago;
         if (pagoRes.First == null)
         {
-            var montoTotal = inquilino.D("renta") + await TotalExtraPendiente(inquilinoId);
+            var montoTotal = inquilino.D("renta");
             pago = (await Db.Query("INSERT INTO pagos (inquilino_id, periodo, monto, metodo) VALUES ($1, $2, $3, $4) RETURNING *",
                 inquilinoId, periodo, montoTotal, Metodo(inquilino))).First!;
         }
@@ -420,10 +417,7 @@ public static class PagosEndpoints
         if ((DateTime.UtcNow - refDate).TotalHours > 24)
             throw new AppError("Ya pasó más de un día. Para corregir este pago usa un abono manual.", 400);
 
-        // abonos_pago y promesas_pago se borran en cascada. Los cargos extra "pagados" por este pago vuelven a pendientes.
-        await Db.Query(
-            @"UPDATE cuotas_extra SET estado = 'pendiente', pagado_en = NULL
-              WHERE inquilino_id = $1 AND periodo = $2 AND estado = 'pagado'", pago.S("inquilino_id"), pago.S("periodo"));
+        // abonos_pago y promesas_pago se borran en cascada. Las cuotas extra son independientes y no se tocan.
         await Db.Query("DELETE FROM pagos WHERE id = $1", pagoId);
 
         var usuarioId = pago.S("usuario_id");
@@ -645,9 +639,9 @@ public static class PagosEndpoints
                 WHERE p.inquilino_id = $1 GROUP BY p.periodo
               )
               SELECT pe.periodo,
-                     ($3::numeric + COALESCE(c.total, 0)) AS monto_esperado,
+                     $3::numeric AS monto_esperado,
                      COALESCE(ab.total, 0) AS abonado,
-                     GREATEST($3::numeric + COALESCE(c.total, 0) - COALESCE(ab.total, 0), 0) AS saldo
+                     GREATEST($3::numeric - COALESCE(ab.total, 0), 0) AS saldo
               FROM periodos pe
               LEFT JOIN cuotas c ON c.periodo = pe.periodo
               LEFT JOIN abonado ab ON ab.periodo = pe.periodo
@@ -766,7 +760,7 @@ public static class PagosEndpoints
   + COALESCE((SELECT c.valor FROM configuracion c
               WHERE c.admin_id = i.admin_id AND c.clave = 'dias_gracia_retraso')::int, 0)
 )";
-    const string DeudaMes = "i.renta + COALESCE(cx.total, 0) - COALESCE(ab.total, 0)";
+    const string DeudaMes = "i.renta - COALESCE(ab.total, 0)"; // solo renta; cuotas extra van aparte (deuda_cuotas_extra)
     const string DeudaVencida = "COALESCE(SUM(GREATEST(CASE WHEN " + MesVencido + " THEN " + DeudaMes + " ELSE 0 END, 0)), 0)";
     const string DeudaTotal = "COALESCE(SUM(GREATEST(" + DeudaMes + ", 0)), 0)";
     const string PeriodoVencido = "MIN(CASE WHEN " + MesVencido + " AND " + DeudaMes + " > 0.5 THEN to_char(gs, 'YYYY-MM') END)";
@@ -776,10 +770,6 @@ FROM inquilinos i
 CROSS JOIN LATERAL generate_series(
   date_trunc('month', i.fecha_inicio), date_trunc('month', CURRENT_DATE), interval '1 month'
 ) AS gs
-LEFT JOIN LATERAL (
-  SELECT SUM(monto) AS total FROM cuotas_extra
-  WHERE inquilino_id = i.id AND periodo = to_char(gs, 'YYYY-MM')
-) cx ON true
 LEFT JOIN LATERAL (
   SELECT SUM(a.monto) AS total FROM pagos p JOIN abonos_pago a ON a.pago_id = p.id
   WHERE p.inquilino_id = i.id AND p.periodo = to_char(gs, 'YYYY-MM')
