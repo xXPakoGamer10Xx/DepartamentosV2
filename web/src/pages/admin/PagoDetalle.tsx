@@ -39,7 +39,7 @@ export default function PagoDetalle() {
   const puedeMarcar = can('pagos.marcar')
   const esAdmin = user?.rol === 'admin'
 
-  const [abonoModal, setAbonoModal] = useState<{ tipo: 'renta' | 'deposito'; abono?: Abono } | null>(null)
+  const [abonoModal, setAbonoModal] = useState<{ tipo: 'renta' | 'deposito'; abono?: Abono; periodo?: string; saldo?: number } | null>(null)
   const [rechazar, setRechazar] = useState(false)
   const [cuotaModal, setCuotaModal] = useState(false)
   const [cancelar, setCancelar] = useState(false)
@@ -262,7 +262,10 @@ export default function PagoDetalle() {
                   {saldoQ.data.detalle.filter(d => num(d.saldo) > 0.5).map(d => (
                     <li key={d.periodo} className="flex items-center justify-between py-2">
                       <span className="inline-block first-letter:uppercase">{periodoLabel(d.periodo)}</span>
-                      <span className="text-right"><b className="text-danger">{money(d.saldo)}</b>{num(d.abonado) > 0 && <span className="block text-xs text-muted">abonado {money(d.abonado)}</span>}</span>
+                      <span className="flex items-center gap-3">
+                        <span className="text-right"><b className="text-danger">{money(d.saldo)}</b>{num(d.abonado) > 0 && <span className="block text-xs text-muted">abonado {money(d.abonado)}</span>}</span>
+                        {puedeMarcar && <Button variant="secondary" className="h-8 px-3" icon={<HandCoins className="size-4" />} onClick={() => setAbonoModal({ tipo: 'renta', periodo: d.periodo, saldo: num(d.saldo) })}>Abonar</Button>}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -329,18 +332,18 @@ function Abonos({ items, editable, onEdit, onDelete }: { items: Abono[]; editabl
   )
 }
 
-function AbonoModal({ state, inquilinoId, metodoDefault, onClose, onSaved }: { state: { tipo: 'renta' | 'deposito'; abono?: Abono } | null; inquilinoId: string; metodoDefault: string; onClose: () => void; onSaved: () => void }) {
+function AbonoModal({ state, inquilinoId, metodoDefault, onClose, onSaved }: { state: { tipo: 'renta' | 'deposito'; abono?: Abono; periodo?: string; saldo?: number } | null; inquilinoId: string; metodoDefault: string; onClose: () => void; onSaved: () => void }) {
   return (
-    <Modal open={!!state} title={`${state?.abono ? 'Editar' : 'Registrar'} abono ${state?.tipo === 'deposito' ? 'al depósito' : 'a la renta'}`} onClose={onClose}>
-      {state && <AbonoForm key={state.abono?.id ?? state.tipo} state={state} inquilinoId={inquilinoId} metodoDefault={metodoDefault} onSaved={onSaved} />}
+    <Modal open={!!state} title={`${state?.abono ? 'Editar' : 'Registrar'} abono ${state?.tipo === 'deposito' ? 'al depósito' : 'a la renta'}${state?.periodo ? ` de ${periodoLabel(state.periodo)}` : ''}`} onClose={onClose}>
+      {state && <AbonoForm key={state.abono?.id ?? `${state.tipo}-${state.periodo ?? ''}`} state={state} inquilinoId={inquilinoId} metodoDefault={metodoDefault} onSaved={onSaved} />}
     </Modal>
   )
 }
 
-function AbonoForm({ state, inquilinoId, metodoDefault, onSaved }: { state: { tipo: 'renta' | 'deposito'; abono?: Abono }; inquilinoId: string; metodoDefault: string; onSaved: () => void }) {
+function AbonoForm({ state, inquilinoId, metodoDefault, onSaved }: { state: { tipo: 'renta' | 'deposito'; abono?: Abono; periodo?: string; saldo?: number }; inquilinoId: string; metodoDefault: string; onSaved: () => void }) {
   const toast = useToast()
   const a = state.abono
-  const [monto, setMonto] = useState(a ? String(num(a.monto)) : '')
+  const [monto, setMonto] = useState(a ? String(num(a.monto)) : state.saldo && state.saldo > 0 ? String(state.saldo) : '')
   const [fechaV, setFechaV] = useState(a ? String(a.fecha).slice(0, 10) : hoyISO())
   const [metodo, setMetodo] = useState(a?.metodo ?? metodoDefault)
   const [nota, setNota] = useState(a?.nota ?? '')
@@ -351,7 +354,7 @@ function AbonoForm({ state, inquilinoId, metodoDefault, onSaved }: { state: { ti
       const m = parseFloat(monto)
       const body = { monto: m, fecha: fechaV || undefined, metodo, nota: nota.trim() || undefined }
       if (state.tipo === 'deposito') return a ? api.editarAbonoDeposito(a.id, body) : api.registrarAbonoDeposito({ inquilino_id: inquilinoId, ...body })
-      return a ? api.editarAbono(a.id, body) : api.registrarAbono({ inquilino_id: inquilinoId, ...body })
+      return a ? api.editarAbono(a.id, body) : api.registrarAbono({ inquilino_id: inquilinoId, periodo: state.periodo, ...body })
     },
     onSuccess: () => { toast('Abono guardado', 'success'); onSaved() },
     onError: (e) => setError(errMsg(e, 'No se pudo guardar el abono')),
