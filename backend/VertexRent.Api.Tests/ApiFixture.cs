@@ -39,6 +39,9 @@ public sealed class ApiFixture : IAsyncLifetime
         await _db.DisposeAsync();
     }
 
+    /// <summary>Para pruebas que necesitan alterar la base directamente.</summary>
+    public string ConnectionString => _db.GetConnectionString();
+
     public HttpClient NewClient() => _factory.CreateClient();
 
     public string UniqueEmail(string prefix) => $"{prefix}{Interlocked.Increment(ref _seq)}@prueba.test";

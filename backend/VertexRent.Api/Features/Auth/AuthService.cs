@@ -16,6 +16,22 @@ public static class AuthService
         await AuthRepository.RegistrarAcceso(user.S("id")!);
 
         var permisos = user.J("permisos") as JsonArray ?? new JsonArray();
+        return new()
+        {
+            ["token"] = EmitirToken(user),
+            ["user"] = new Dictionary<string, object?>
+            {
+                ["id"] = user.S("id"), ["email"] = user.S("email"),
+                ["nombre_completo"] = user.S("nombre_completo"), ["rol"] = user.S("rol"),
+                ["avatar_url"] = user.S("avatar_url"),
+                ["permisos"] = user.S("rol") == "admin" ? null : permisos,
+            },
+        };
+    }
+
+    /// <summary>Token de sesión construido siempre con los datos ACTUALES del usuario en la base de datos.</summary>
+    static string EmitirToken(Row user)
+    {
         var payload = new JsonObject
         {
             ["id"] = user.S("id"), ["email"] = user.S("email"),
@@ -25,19 +41,9 @@ public static class AuthService
         if (user.S("rol") != "admin")
         {
             payload["admin_id"] = user.S("admin_id");
-            payload["permisos"] = permisos.DeepClone();
+            payload["permisos"] = (user.J("permisos") as JsonArray ?? new JsonArray()).DeepClone();
         }
-        return new()
-        {
-            ["token"] = Jwt.Create(payload),
-            ["user"] = new Dictionary<string, object?>
-            {
-                ["id"] = user.S("id"), ["email"] = user.S("email"),
-                ["nombre_completo"] = user.S("nombre_completo"), ["rol"] = user.S("rol"),
-                ["avatar_url"] = user.S("avatar_url"),
-                ["permisos"] = user.S("rol") == "admin" ? null : permisos,
-            },
-        };
+        return Jwt.Create(payload);
     }
 
     public static async Task<Row> Me(AuthUser u)
@@ -131,11 +137,8 @@ public static class AuthService
         var hash = await AuthRepository.HashDePassword(u.Actor);
         if (hash == null || !BCrypt.Net.BCrypt.Verify(actual, hash)) throw new AppError("Contraseña actual incorrecta", 400);
 
-        var version = await AuthRepository.CambiarPassword(u.Actor, BCrypt.Net.BCrypt.HashPassword(nueva, 12));
-        var payload = new JsonObject((u.Raw ?? new JsonObject()).Select(kv => KeyValuePair.Create(kv.Key, kv.Value?.DeepClone())))
-        {
-            ["tv"] = version,
-        };
-        return Jwt.Create(payload);
+        await AuthRepository.CambiarPassword(u.Actor, BCrypt.Net.BCrypt.HashPassword(nueva, 12));
+        var usuario = await AuthRepository.UsuarioPorId(u.Actor) ?? throw new AppError("Usuario no encontrado", 404);
+        return EmitirToken(usuario);
     }
 }

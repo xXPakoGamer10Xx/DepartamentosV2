@@ -209,4 +209,55 @@ public sealed class UsuariosAuthTests(ApiFixture api)
         Assert.Equal(nuevo.Id, Str(fila, "usado_por"));
         Assert.Equal(HttpStatusCode.Forbidden, (await Registrar(api, new { email = api.UniqueEmail("r"), password = "Contrasena-123", nombre_completo = "Reuso", rol = "inquilino", invite_code = codigo })).Item1);
     }
+
+    // ── Revisión de seguridad: rol, permisos y creación de cuentas ───────────
+    [Fact]
+    public async Task Degradar_a_un_colaborador_le_quita_permisos_y_cierra_sus_sesiones()
+    {
+        var a = await api.RegisterAdmin();
+        var colab = await api.InviteUser(a, "cobrador", new[] { "pagos", "pagos.marcar" });
+        Assert.Equal(HttpStatusCode.OK, (await colab.Get("/api/pagos/saldos")).Status);
+
+        Assert.Equal(HttpStatusCode.OK, (await a.Patch($"/api/usuarios/{colab.Id}/rol", new { rol = "inquilino" })).Status);
+
+        // el token anterior (que decía "cobrador") ya no sirve
+        Assert.Equal(HttpStatusCode.Unauthorized, (await colab.Get("/api/pagos/saldos")).Status);
+        // al volver a entrar es inquilino y ya no conserva los permisos
+        var nuevo = await api.Login(colab.Email);
+        Assert.Equal(HttpStatusCode.Forbidden, (await nuevo.Get("/api/pagos/saldos")).Status);
+        var (_, me) = await nuevo.Get("/api/auth/me");
+        Assert.Equal("inquilino", Str(me, "data", "rol"));
+        Assert.Empty(me!["data"]!["permisos"]!.AsArray());
+        // y si lo vuelven colaborador empieza sin permisos
+        await a.Patch($"/api/usuarios/{colab.Id}/rol", new { rol = "cobrador" });
+        var otra = await api.Login(colab.Email);
+        Assert.Equal(HttpStatusCode.Forbidden, (await otra.Get("/api/pagos/saldos")).Status);
+    }
+
+    [Fact]
+    public async Task Crear_usuario_no_produce_administradores_ni_reserva_el_correo_de_la_plataforma()
+    {
+        var a = await api.RegisterAdmin();
+        Assert.Equal(HttpStatusCode.BadRequest, (await a.Post("/api/usuarios", new { email = api.UniqueEmail("adm"), password = "Contrasena-123", nombre_completo = "Otro Admin", rol = "admin" })).Status);
+        // el correo del dueño de la plataforma (ApiFixture.PlatformEmail) no se puede crear desde aquí
+        Assert.Equal(HttpStatusCode.Conflict, (await a.Post("/api/usuarios", new { email = ApiFixture.PlatformEmail, password = "Contrasena-123", nombre_completo = "Intruso", rol = "cobrador" })).Status);
+    }
+
+    [Fact]
+    public async Task El_rol_vigente_sale_de_la_base_de_datos_y_no_del_token()
+    {
+        var a = await api.RegisterAdmin();
+        var colab = await api.InviteUser(a, "cobrador", new[] { "pagos" });
+        Assert.Equal(HttpStatusCode.OK, (await colab.Get("/api/pagos/saldos")).Status);
+
+        // Se cambia el rol directamente en la base SIN tocar token_version: el token sigue "vigente" y todavía dice "cobrador".
+        await using (var conn = new Npgsql.NpgsqlConnection(api.ConnectionString))
+        {
+            await conn.OpenAsync();
+            await using var cmd = new Npgsql.NpgsqlCommand("UPDATE usuarios SET rol = 'inquilino' WHERE id = @id::uuid", conn);
+            cmd.Parameters.AddWithValue("id", colab.Id);
+            await cmd.ExecuteNonQueryAsync();
+        }
+        Assert.Equal(HttpStatusCode.Forbidden, (await colab.Get("/api/pagos/saldos")).Status);
+    }
 }

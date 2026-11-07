@@ -17,15 +17,19 @@ public static class UsuariosService
         if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password) || string.IsNullOrEmpty(nombre))
             throw new AppError("Email, contraseña y nombre son requeridos", 400);
         if (password.Length < 8) throw new AppError("La contraseña debe tener al menos 8 caracteres", 400);
-        if (rol is not ("admin" or "cobrador" or "inquilino"))
-            throw new AppError("Rol inválido. Usa \"admin\", \"cobrador\" o \"inquilino\"", 400);
+        // Un administrador nuevo solo nace por el registro (/register), que aplica ADMIN_SIGNUP_CODE: crearlo aquí
+        // daría una cuenta independiente (sin datos compartidos) saltándose esa regla.
+        if (rol is not ("cobrador" or "inquilino"))
+            throw new AppError("Rol inválido. Usa \"cobrador\" o \"inquilino\"", 400);
 
         var correo = email.ToLowerInvariant();
-        if (await UsuariosRepository.ExisteEmail(correo)) throw new AppError("Ya existe un usuario con ese email", 409);
+        // Las direcciones del dueño de la plataforma no se pueden reservar creándolas desde aquí.
+        if (Env.EsCorreoDePlataforma(correo) || await UsuariosRepository.ExisteEmail(correo))
+            throw new AppError("Ya existe un usuario con ese email", 409);
 
         var permisos = rol == "cobrador" ? Permisos.Sanitize(b["permisos"]) : new List<string>();
         return await UsuariosRepository.Insertar(correo, BCrypt.Net.BCrypt.HashPassword(password, 12), Js.TitleCase(nombre), rol,
-            rol == "admin" ? null : u.Id, JsonX.Arr(permisos).ToJsonString(),
+            u.Id, JsonX.Arr(permisos).ToJsonString(),
             rol == "cobrador" && !string.IsNullOrEmpty(rolLabel) ? rolLabel : null);
     }
 

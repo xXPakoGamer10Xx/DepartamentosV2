@@ -36,7 +36,12 @@ internal static class UsuariosRepository
 
     public static async Task<Row?> CambiarRol(string id, string rol, string adminId) =>
         (await Db.Query(
-            @"UPDATE usuarios SET rol = $1, admin_id = COALESCE(admin_id, $3) WHERE id = $2
+            @"UPDATE usuarios SET rol = $1::text, admin_id = COALESCE(admin_id, $3),
+                -- Quien deja de ser colaborador pierde sus permisos, y las sesiones abiertas (con el rol anterior) se cierran.
+                permisos = CASE WHEN $1::text = 'cobrador' THEN permisos ELSE '[]'::jsonb END,
+                rol_label = CASE WHEN $1::text = 'cobrador' THEN rol_label ELSE NULL END,
+                token_version = token_version + 1
+              WHERE id = $2
               RETURNING id, email, nombre_completo, rol, activo", rol, id, adminId)).First;
 
     public static async Task<Row?> ActualizarPerfil(string id, string? nombre, string? avatar) =>

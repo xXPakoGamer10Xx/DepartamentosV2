@@ -5,10 +5,13 @@ namespace VertexRent.Api;
 /// <summary>Todo el SQL de autenticación y registro. Sin reglas de negocio ni HTTP.</summary>
 internal static class AuthRepository
 {
+    const string ColumnasSesion = "id, email, password_hash, nombre_completo, rol, avatar_url, activo, admin_id, permisos, token_version";
+
     public static async Task<Row?> UsuarioParaLogin(string email) =>
-        (await Db.Query(
-            @"SELECT id, email, password_hash, nombre_completo, rol, avatar_url, activo, admin_id, permisos, token_version
-              FROM usuarios WHERE email = $1", email)).First;
+        (await Db.Query($"SELECT {ColumnasSesion} FROM usuarios WHERE email = $1", email)).First;
+
+    public static async Task<Row?> UsuarioPorId(string id) =>
+        (await Db.Query($"SELECT {ColumnasSesion} FROM usuarios WHERE id = $1", id)).First;
 
     public static Task RegistrarAcceso(string id) => Db.Query("UPDATE usuarios SET ultimo_acceso = NOW() WHERE id = $1", id);
 
@@ -57,8 +60,7 @@ internal static class AuthRepository
     public static async Task<string?> HashDePassword(string usuarioId) =>
         (await Db.Query("SELECT password_hash FROM usuarios WHERE id = $1", usuarioId)).First?.S("password_hash");
 
-    /// <summary>Guarda la contraseña nueva y sube token_version (cierra las demás sesiones). Devuelve la nueva versión.</summary>
-    public static async Task<int> CambiarPassword(string usuarioId, string hash) =>
-        (await Db.Query("UPDATE usuarios SET password_hash = $1, token_version = token_version + 1 WHERE id = $2 RETURNING token_version",
-            hash, usuarioId)).First!.I("token_version");
+    /// <summary>Guarda la contraseña nueva y sube token_version (cierra las demás sesiones).</summary>
+    public static Task CambiarPassword(string usuarioId, string hash) =>
+        Db.Query("UPDATE usuarios SET password_hash = $1, token_version = token_version + 1 WHERE id = $2", hash, usuarioId);
 }

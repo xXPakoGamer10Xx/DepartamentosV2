@@ -89,6 +89,9 @@ try
     Db.Init();
     await Migrations.Apply();
     await ContratoMigracion.Run();
+    // Mientras el dueño no tenga cuenta, cualquiera podría registrar esa dirección y heredar el acceso a los respaldos.
+    foreach (var correo in Env.PlatformEmailsSinCuenta().ToList())
+        Console.Error.WriteLine($"⚠️  PLATFORM_ADMIN_EMAILS: '{correo}' aún no tiene cuenta. Regístrala TÚ primero: quien la cree obtiene acceso a los respaldos.");
     Console.WriteLine("✅ Conexión a PostgreSQL establecida");
 }
 catch (Exception ex)

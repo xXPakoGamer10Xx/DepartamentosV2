@@ -36,15 +36,18 @@ public static class Guards
         return u;
     }
 
-    /// <summary>La sesión solo vale mientras el usuario siga activo y no haya cambiado su contraseña (token_version).</summary>
-    static async Task EnsureSesionVigente(string userId, JsonObject payload)
+    /// <summary>
+    /// La sesión solo vale mientras el usuario siga activo y no haya cambiado su contraseña o rol (token_version).
+    /// Devuelve su fila actual: rol y propietario se toman de la base de datos, no de lo que diga el token.
+    /// </summary>
+    static async Task<Row> SesionVigente(string userId, JsonObject payload)
     {
         if (!Guid.TryParse(userId, out _)) throw new AppError("Token inválido o expirado", 401);
-        var r = await Db.Query("SELECT activo, token_version FROM usuarios WHERE id = $1", userId);
-        var row = r.First;
+        var row = (await Db.Query("SELECT activo, token_version, rol, admin_id FROM usuarios WHERE id = $1", userId)).First;
         var tv = Js.ParseFloat(payload["tv"]); if (double.IsNaN(tv)) tv = 0;
         if (row == null || !row.B("activo") || row.I("token_version") != (int)tv)
             throw new AppError("Token inválido o expirado", 401);
+        return row;
     }
 
     // ── authMiddleware ────────────────────────────────────────────────────────
@@ -57,7 +60,9 @@ public static class Guards
         // Los tokens de propósito limitado (pdf_download, sse_ticket) no sirven como sesión.
         if (payload["scope"] != null) throw new AppError("Token inválido o expirado", 401);
         var user = FromPayload(payload);
-        await EnsureSesionVigente(user.Id, payload);
+        var actual = await SesionVigente(user.Id, payload);
+        user.Rol = actual.S("rol") ?? "";
+        user.AdminId = actual.S("admin_id");
         // Un colaborador opera SOBRE los datos de su admin: id se reescribe al del admin.
         if (user.Rol == "cobrador" && !string.IsNullOrEmpty(user.AdminId))
         {

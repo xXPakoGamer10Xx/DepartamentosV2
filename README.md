@@ -168,7 +168,7 @@ El archivo `.env` se ubica en la raíz del proyecto. A continuación se listan l
 | `DB_PASSWORD` | *Obligatoria* | Contraseña de PostgreSQL. En producción el backend no arranca si falta o es la de ejemplo; `docker compose` tampoco. |
 | `JWT_SECRET` | *Generado en arranque* | Secreto criptográfico de firma para tokens JWT de sesión. |
 | `JWT_EXPIRES_IN` | `7d` | Duración de validez de la sesión del usuario. |
-| `PLATFORM_ADMIN_EMAILS` | *Vacía* | Correos (separados por coma, en minúsculas y sin alias de Gmail) del dueño de la plataforma: los únicos con acceso a los respaldos globales de la base. Sin ella nadie puede crear ni descargar respaldos desde la app. |
+| `PLATFORM_ADMIN_EMAILS` | *Vacía* | Correos (separados por coma, en minúsculas y sin alias de Gmail) del dueño de la plataforma: los únicos con acceso a los respaldos globales de la base. Sin ella nadie puede crear ni descargar respaldos desde la app. **Registra primero tu cuenta con ese correo y después define la variable**: mientras la cuenta no exista, quien la registre obtiene el acceso (el backend avisa al arrancar). |
 | `ADMIN_SIGNUP_CODE` | *Vacía* | Si se define, crear un administrador nuevo exige este código (instalación privada). Vacía = registro abierto. |
 | `CONFIRM_RESET` | *Vacía* | Solo para `--reset`: debe ser igual al nombre de la base para permitir borrarla. |
 | `BACKUP_CRON` | `0 4 * * *` | Formato cron de ejecución automática para respaldos diarios. |
@@ -182,7 +182,8 @@ No hay usuarios ni contraseñas predefinidos. El registro es abierto: cualquiera
 
 - **Aislamiento**: cada administrador, y los colaboradores que invita, solo ve los datos de su propio espacio.
 - **Colaboradores**: acceden según los permisos que se les asignan (pagos, inquilinos, contratos, ...).
-- **Sesiones**: se cierran al desactivar al usuario o cambiar su contraseña.
+- **Sesiones**: se cierran al desactivar al usuario o al cambiar su contraseña o su rol. El rol y el propietario se leen siempre de la base de datos, no del token.
+- **Administradores nuevos**: solo nacen por el registro (`/register`, con `ADMIN_SIGNUP_CODE` si está definido); `Configuración ➡️ Usuarios` crea colaboradores e inquilinos.
 
 ---
 
