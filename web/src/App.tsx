@@ -1,9 +1,10 @@
 import { useUsaApp } from './lib/usaApp'
 import { lazy, Suspense, type ReactNode } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AppShell } from './components/layout/AppShell'
 import { FullPageSpinner } from './components/ui/Spinner'
 import { useAuth } from './lib/auth'
+import { destinoTrasLogin } from './lib/destino'
 import type { Permiso } from './lib/types'
 
 // Carga diferida por pantalla: el primer pintado solo descarga lo necesario.
@@ -33,14 +34,17 @@ const NotFound = lazy(() => import('./pages/NotFound'))
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
+  const location = useLocation()
   if (loading) return <FullPageSpinner />
-  return user ? children : <Navigate to="/login" replace />
+  // Se recuerda la ruta pedida (p. ej. el enlace de un QR) para volver a ella tras iniciar sesión.
+  return user ? children : <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />
 }
 
 function GuestOnly({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
+  const location = useLocation()
   if (loading) return <FullPageSpinner />
-  return user ? <Navigate to="/" replace /> : children
+  return user ? <Navigate to={destinoTrasLogin(location.state)} replace /> : children
 }
 
 /** Colaboradores: la ruta solo existe si tienen el permiso (el servidor lo vuelve a comprobar). */
@@ -70,8 +74,8 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<GuestOnly><Login /></GuestOnly>} />
         <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
-        {/* Pública: la abre quien escanea el QR de pago en efectivo (con o sin sesión). */}
-        <Route path="/confirmar/:token" element={<ConfirmarPago />} />
+        {/* La abre quien escanea el QR de pago en efectivo: requiere sesión y permiso de cobro. */}
+        <Route path="/confirmar/:token" element={<RequireAuth><Guard permiso="pagos.marcar"><ConfirmarPago /></Guard></RequireAuth>} />
 
         <Route element={<RequireAuth><AppShell /></RequireAuth>}>
           <Route index element={<Home />} />

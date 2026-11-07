@@ -10,6 +10,7 @@ import { StaggerItem, StaggerList } from '../../../components/ui/MotionPrimitive
 import { useToast } from '../../../components/ui/Toast'
 import { api } from '../../../lib/api'
 import { useAuth } from '../../../lib/auth'
+import { replaceToken } from '../../../lib/session'
 
 const RECORD_OPCIONES = [7, 5, 3, 2, 1, 0]
 const parseRecord = (v?: string): number[] => {
@@ -143,7 +144,7 @@ function PasswordModal({ open, onClose }: { open: boolean; onClose: () => void }
   const [a, setA] = useState(''); const [n, setN] = useState(''); const [n2, setN2] = useState(''); const [error, setError] = useState('')
   const cambiar = useMutation({
     mutationFn: () => api.changePassword(a, n),
-    onSuccess: () => { toast('Contraseña actualizada', 'success'); setA(''); setN(''); setN2(''); onClose() },
+    onSuccess: (res) => { replaceToken(res.data.token); toast('Contraseña actualizada', 'success'); setA(''); setN(''); setN2(''); onClose() },
     onError: (e) => setError(errMsg(e, 'No se pudo cambiar la contraseña')),
   })
   const submit = () => {

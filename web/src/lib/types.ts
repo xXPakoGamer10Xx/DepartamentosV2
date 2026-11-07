@@ -24,6 +24,8 @@ export interface User {
   /** null para el admin (puede todo); lista para colaboradores. */
   permisos: Permiso[] | null
   rol_label?: string | null
+  /** true solo para el dueño de la plataforma (acceso a los respaldos globales). */
+  plataforma?: boolean
   activo?: boolean
   ultimo_acceso?: string | null
   created_at?: string

@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: ${DB_NAME:-departamentos}
       POSTGRES_USER: ${DB_USER:-depas_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-depas_secret_2024}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en el .env}
       TZ: America/Mexico_City
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -39,12 +39,14 @@ services:
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-departamentos}
       DB_USER: ${DB_USER:-depas_user}
-      DB_PASSWORD: ${DB_PASSWORD:-depas_secret_2024}
+      DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en el .env}
       JWT_SECRET: ${JWT_SECRET:-cambia_este_secreto_en_produccion}
       JWT_EXPIRES_IN: 7d
       # Código requerido para registrar una cuenta de Administrador nueva e
       # independiente desde /register. Sin definir, ese registro queda cerrado.
       ADMIN_SIGNUP_CODE: ${ADMIN_SIGNUP_CODE:-}
+      # Correos (separados por coma) del dueño de la plataforma: únicos con acceso a los respaldos globales.
+      PLATFORM_ADMIN_EMAILS: ${PLATFORM_ADMIN_EMAILS:-}
       # Orígenes permitidos por CORS en producción (separados por coma).
       FRONTEND_URL: ${FRONTEND_URL:-https://nethrent.duckdns.org}
       # Clave de Google Gemini para el procesado IA del contrato (opcional).
@@ -83,7 +85,9 @@ services:
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-departamentos}
       DB_USER: ${DB_USER:-depas_user}
-      DB_PASSWORD: ${DB_PASSWORD:-depas_secret_2024}
+      DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en el .env}
+      # Confirmación explícita: --migrate hace DROP de todas las tablas (ver start.sh).
+      CONFIRM_RESET: ${CONFIRM_RESET:-}
     command: ["--migrate"]
     healthcheck:
       disable: true

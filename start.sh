@@ -135,6 +135,20 @@ if [ "$FORCE_RESET" = "1" ] || [ "${TABLE_EXISTS:-0}" = "0" ]; then
     echo "🔄 Primer despliegue — creando esquema de base de datos..."
   fi
 
+  # --migrate borra TODAS las tablas: solo corre con confirmación explícita.
+  if [ "$FORCE_RESET" = "1" ]; then
+    echo "⚠️  Esto BORRARÁ todos los datos de la base '${DB_NAME}'."
+    if [ -t 0 ]; then
+      read -r -p "   Escribe el nombre de la base para confirmar: " CONFIRMA
+    else
+      CONFIRMA="${CONFIRM_RESET:-}"
+    fi
+    if [ "$CONFIRMA" != "$DB_NAME" ]; then
+      echo "❌ Confirmación incorrecta. No se borró nada."
+      exit 1
+    fi
+  fi
+  export CONFIRM_RESET="$DB_NAME"
   docker compose build migrate
   docker compose --profile tools run --rm migrate
   echo "✅ Esquema creado"

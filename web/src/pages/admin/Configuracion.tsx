@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { useSearchParams } from 'react-router-dom'
+import { useAuth } from '../../lib/auth'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Segmented } from '../../components/ui/Segmented'
 import { General } from './config/General'
@@ -15,11 +16,14 @@ const TABS: { value: Tab; label: string }[] = [
 
 export default function Configuracion() {
   const [sp, setSp] = useSearchParams()
-  const tab = (TABS.find(t => t.value === sp.get('tab'))?.value ?? 'general') as Tab
+  const { user } = useAuth()
+  // Los respaldos incluyen los datos de todos los propietarios: solo los ve el dueño de la plataforma.
+  const tabs = TABS.filter(t => t.value !== 'respaldos' || user?.plataforma)
+  const tab = (tabs.find(t => t.value === sp.get('tab'))?.value ?? 'general') as Tab
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader title="Configuración" subtitle="Tu cuenta, el equipo y el funcionamiento del sistema" />
-      <Segmented value={tab} onChange={t => setSp(t === 'general' ? {} : { tab: t }, { replace: true })} options={TABS} />
+      <Segmented value={tab} onChange={t => setSp(t === 'general' ? {} : { tab: t }, { replace: true })} options={tabs} />
       <AnimatePresence mode="wait">
         <motion.div
           key={tab} className="min-w-0"

@@ -2,11 +2,12 @@ import clsx from 'clsx'
 import { Lock, Mail } from 'lucide-react'
 import { motion } from 'motion/react'
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { ShakeError } from '../components/ui/MotionPrimitives'
 import { useAuth } from '../lib/auth'
+import { destinoTrasLogin } from '../lib/destino'
 import type { Rol } from '../lib/types'
 import { AuthLayout } from './AuthLayout'
 
@@ -16,6 +17,7 @@ const LABEL: Record<Rol, string> = { admin: 'Administrador', cobrador: 'Cobrador
 export default function Login() {
   const { login, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [tab, setTab] = useState<Tab>('admin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -35,7 +37,7 @@ export default function Login() {
         setError(`Esta cuenta es de tipo "${LABEL[user.rol]}". Elegiste la pestaña "${tab === 'admin' ? 'Administrador' : 'Inquilino'}" — cámbiala para continuar.`)
         return
       }
-      navigate('/', { replace: true })
+      navigate(destinoTrasLogin(location.state), { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Credenciales incorrectas. Verifica e intenta de nuevo.')
     } finally { setLoading(false) }

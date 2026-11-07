@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { API_URL } from './api'
+import { API_URL, ApiError, api } from './api'
 
 // Eventos en vivo del backend (Server-Sent Events). Una sola conexión compartida por toda la app.
 export type SseEvent = 'ticket_new' | 'ticket_updated' | 'payment_confirmed' | 'payment_rejected' | 'comprobante_subido' | 'notification_new'
@@ -9,30 +9,41 @@ type Listener = (data: any) => void // eslint-disable-line @typescript-eslint/no
 const listeners = new Map<string, Set<Listener>>()
 let es: EventSource | null = null
 let retry: ReturnType<typeof setTimeout> | null = null
-let currentToken = ''
+let wanted = false // true mientras la app quiere la conexión abierta (hay sesión)
 
-function open() {
-  const base = API_URL.endsWith('/api') ? API_URL : `${API_URL}`
-  es = new EventSource(`${base}/events?token=${encodeURIComponent(currentToken)}`)
-  es.onopen = () => { if (retry) { clearTimeout(retry); retry = null } }
-  es.onerror = () => {
-    es?.close(); es = null
-    retry = setTimeout(open, 4000)
+async function open() {
+  retry = null
+  if (!wanted || es) return
+  let ticket: string
+  try { ticket = (await api.sseTicket()).data.ticket }
+  catch (e) {
+    // 401: la sesión ya no vale (api.ts cierra la sesión); no se reintenta. Otro fallo: se reintenta.
+    if (!(e instanceof ApiError && e.status === 401) && wanted) retry = setTimeout(open, 4000)
+    return
+  }
+  if (!wanted || es) return
+  const source = new EventSource(`${API_URL}/events?ticket=${encodeURIComponent(ticket)}`)
+  es = source
+  source.onerror = () => {
+    // El boleto vale una conexión: al caerse se pide otro.
+    source.close()
+    if (es === source) es = null
+    if (wanted && !retry) retry = setTimeout(open, 4000)
   }
   for (const evt of EVENTS) {
-    es.addEventListener(evt, (e) => {
+    source.addEventListener(evt, (e) => {
       try { const data = JSON.parse((e as MessageEvent).data); listeners.get(evt)?.forEach(cb => cb(data)) } catch { /* payload inválido */ }
     })
   }
 }
 
-export function connectSSE(token: string) {
-  if (es) return
-  currentToken = token
-  open()
+export function connectSSE() {
+  wanted = true
+  void open()
 }
 
 export function disconnectSSE() {
+  wanted = false
   if (retry) { clearTimeout(retry); retry = null }
   es?.close(); es = null
 }
@@ -40,8 +51,8 @@ export function disconnectSSE() {
 // Cerrar el stream al descargar la página: con HTTP/1.1 el navegador permite ~6 conexiones por host y cada recarga
 // dejaba una abierta, hasta bloquear todas las peticiones. Si la página vuelve del caché (bfcache), se reconecta.
 if (typeof window !== 'undefined') {
-  window.addEventListener('pagehide', disconnectSSE)
-  window.addEventListener('pageshow', (e) => { if (e.persisted && currentToken && !es) open() })
+  window.addEventListener('pagehide', () => { if (es) { es.close(); es = null } })
+  window.addEventListener('pageshow', (e) => { if (e.persisted && wanted && !es) void open() })
 }
 
 export function useSSE(event: SseEvent, callback: Listener) {

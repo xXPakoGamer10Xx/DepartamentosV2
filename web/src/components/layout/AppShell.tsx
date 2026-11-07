@@ -8,7 +8,6 @@ import { iniciales } from '../../lib/format'
 import { useUsaApp } from '../../lib/usaApp'
 import { resubscribeIfGranted } from '../../lib/push'
 import { connectSSE, disconnectSSE } from '../../lib/sse'
-import { getToken } from '../../lib/session'
 import { navFor, type NavItem } from './nav'
 import { BrandLogo } from './BrandLogo'
 import { NotificationBell } from './NotificationBell'
@@ -38,8 +37,7 @@ export function AppShell() {
 
   // Conexión en vivo + restaurar suscripción push (solo si ya había permiso).
   useEffect(() => {
-    const t = getToken()
-    if (t) connectSSE(t)
+    connectSSE()
     void resubscribeIfGranted()
     return () => disconnectSSE()
   }, [])

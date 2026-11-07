@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { registerSW } from 'virtual:pwa-register'
 import App from './App'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { ToastProvider } from './components/ui/Toast'
 import { AuthProvider } from './lib/auth'
 import './index.css'
@@ -17,6 +18,7 @@ registerSW({ immediate: true })
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
+    <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
@@ -26,5 +28,6 @@ createRoot(document.getElementById('root')!).render(
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>
+    </ErrorBoundary>
   </StrictMode>,
 )
