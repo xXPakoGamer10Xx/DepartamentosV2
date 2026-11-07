@@ -12,6 +12,16 @@ internal sealed record InquilinoDatos(
 /// <summary>Todo el SQL del módulo de inquilinos. Sin reglas de negocio ni HTTP.</summary>
 internal static class InquilinosRepository
 {
+    /// <summary>Inquilino al que el usuario puede acceder: el suyo (inquilino) o uno de su propietario (admin/colaborador).</summary>
+    public static async Task<Row?> Accesible(string inquilinoId, AuthUser u, string columnas = "id")
+    {
+        var filtro = u.Rol == "inquilino" ? "AND usuario_id = $2" : "AND admin_id = $2";
+        return (await Db.Query($"SELECT {columnas} FROM inquilinos WHERE id = $1 {filtro}", inquilinoId, u.Id)).First;
+    }
+
+    public static async Task<Row?> ActivoDelPropietario(string? inquilinoId, string adminId) =>
+        (await Db.Query("SELECT * FROM inquilinos WHERE id = $1 AND admin_id = $2 AND estado = 'activo'", inquilinoId, adminId)).First;
+
     public static async Task<Row?> MiDepto(string usuarioId) =>
         (await Db.Query("SELECT i.* FROM inquilinos i WHERE i.usuario_id = $1 AND i.estado = 'activo' LIMIT 1", usuarioId)).First;
 

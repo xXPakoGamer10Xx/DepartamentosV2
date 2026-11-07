@@ -90,7 +90,7 @@ public static class PagosService
     public static async Task<ResultadoPago> MarcarPagado(AuthUser u, string inquilinoId, bool soloRenta)
     {
         var periodo = Js.CurrentPeriodo();
-        var inquilino = await PagosRepository.InquilinoActivoDelPropietario(inquilinoId, u.Id)
+        var inquilino = await InquilinosRepository.ActivoDelPropietario(inquilinoId, u.Id)
             ?? throw new AppError("Inquilino no encontrado o no autorizado", 404);
 
         var pago = await PagosRepository.PagoDe(inquilinoId, periodo)
@@ -117,7 +117,7 @@ public static class PagosService
 
     public static async Task<Row> SubirComprobante(AuthUser u, string inquilinoId, string imagen)
     {
-        if (await PagosRepository.InquilinoAccesible(inquilinoId, u) == null) throw new AppError("No autorizado", 403);
+        if (await InquilinosRepository.Accesible(inquilinoId, u) == null) throw new AppError("No autorizado", 403);
 
         var periodo = Js.CurrentPeriodo();
         var pago = await PagosRepository.PagoDe(inquilinoId, periodo)
@@ -182,7 +182,7 @@ public static class PagosService
 
     public static async Task<Dictionary<string, object?>> Estado(AuthUser u, string inquilinoId)
     {
-        if (await PagosRepository.InquilinoAccesible(inquilinoId, u) == null) throw new AppError("No autorizado", 403);
+        if (await InquilinosRepository.Accesible(inquilinoId, u) == null) throw new AppError("No autorizado", 403);
         var periodo = Js.CurrentPeriodo();
         var pago = await PagosRepository.PagoDe(inquilinoId, periodo);
         var cuotas = await PagosRepository.CuotasDelPeriodo(inquilinoId, periodo);
@@ -199,7 +199,7 @@ public static class PagosService
 
     public static async Task<List<Row>> Historial(AuthUser u, string inquilinoId)
     {
-        if (await PagosRepository.InquilinoAccesible(inquilinoId, u) == null) throw new AppError("No autorizado", 403);
+        if (await InquilinosRepository.Accesible(inquilinoId, u) == null) throw new AppError("No autorizado", 403);
         return (await PagosRepository.Historial(inquilinoId)).Select(p =>
         {
             bool? aTiempo = null;
@@ -241,7 +241,7 @@ public static class PagosService
         var monto = Js.ParseFloat(b["monto"]);
         if (double.IsNaN(monto) || monto <= 0) throw new AppError("El monto del abono debe ser mayor a 0", 400);
 
-        var inquilino = await PagosRepository.InquilinoActivoDelPropietario(b.S("inquilino_id"), u.Id)
+        var inquilino = await InquilinosRepository.ActivoDelPropietario(b.S("inquilino_id"), u.Id)
             ?? throw new AppError("Inquilino no encontrado o no autorizado", 404);
         var periodo = Js.T(b["periodo"]) ? b.S("periodo")! : Js.CurrentPeriodo();
         if (!Inputs.EsPeriodo(periodo)) throw new AppError("El periodo debe tener el formato AAAA-MM", 400);
@@ -309,7 +309,7 @@ public static class PagosService
         var per = Js.T(b["periodo"]) ? b.S("periodo") : null;
         var periodo = Inputs.EsPeriodo(per) ? per! : Js.CurrentPeriodo();
 
-        var inquilino = await PagosRepository.InquilinoActivoDelPropietario(inquilinoId, u.Id)
+        var inquilino = await InquilinosRepository.ActivoDelPropietario(inquilinoId, u.Id)
             ?? throw new AppError("Inquilino no encontrado o no autorizado", 404);
         var existente = await PagosRepository.PagoDe(inquilinoId, periodo);
         // Borrar la promesa cuando ni siquiera hay pago: no hay nada que guardar.
@@ -355,7 +355,7 @@ public static class PagosService
 
     public static async Task<Dictionary<string, object?>> SaldoInquilino(AuthUser u, string inquilinoId)
     {
-        var inq = await PagosRepository.InquilinoAccesible(inquilinoId, u, "id, renta, fecha_inicio::text AS fecha_inicio_txt")
+        var inq = await InquilinosRepository.Accesible(inquilinoId, u, "id, renta, fecha_inicio::text AS fecha_inicio_txt")
             ?? throw new AppError("No autorizado", 403);
         var detalle = await PagosRepository.SaldoDetalle(inquilinoId, inq.S("fecha_inicio_txt"), inq.S("renta"));
         return new() { ["deuda_total"] = detalle.Sum(r => (double)r.D("saldo")), ["detalle"] = detalle };
