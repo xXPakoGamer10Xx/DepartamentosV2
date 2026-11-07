@@ -9,7 +9,7 @@ export type RowState = 'pagado' | 'revision' | 'atrasado' | 'pendiente'
 export interface EstadoActual {
   inquilino_id: string; pago_id: string | null; monto: Numeric | null
   confirmado: boolean; confirmado_en: string | null; rechazado: boolean
-  comprobante_url: string | null; total_abonado: Numeric
+  tiene_comprobante: boolean; total_abonado: Numeric
 }
 
 export interface Saldo { total: number; vencida: number; periodoVencido: string | null; cuotasExtra: number; deposito: number }
@@ -17,7 +17,7 @@ export interface Saldo { total: number; vencida: number; periodoVencido: string 
 /** `vencida` = meses cuya fecha de pago (+gracia) ya pasó ⇒ atrasado; `total` incluye el mes en curso. */
 export function rowState(e: EstadoActual | undefined, s: Saldo | undefined): RowState {
   if (e?.confirmado) return 'pagado'
-  if (e?.comprobante_url && !e.rechazado) return 'revision'
+  if (e?.tiene_comprobante && !e.rechazado) return 'revision'
   if ((s?.vencida ?? 0) > EPS || e?.rechazado) return 'atrasado'
   return 'pendiente'
 }

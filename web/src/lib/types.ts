@@ -94,7 +94,8 @@ export interface Pago {
   confirmado_en: string | null
   rechazado: boolean
   comentario_admin: string | null
-  comprobante_url: string | null
+  /** Solo en respuestas de un pago individual; los listados traen `tiene_comprobante` y la imagen se pide aparte. */
+  comprobante_url?: string | null
   comprobante_subido_en: string | null
   fecha_promesa: string | null
   created_at: string
@@ -103,7 +104,7 @@ export interface Pago {
 
 export interface Abono {
   id: string; pago_id: string; monto: Numeric; fecha: string; metodo: string
-  nota: string | null; comprobante_url: string | null; registrado_por_nombre?: string | null; created_at: string
+  nota: string | null; tiene_comprobante?: boolean; registrado_por_nombre?: string | null; created_at: string
 }
 
 export interface CuentaBancaria {
