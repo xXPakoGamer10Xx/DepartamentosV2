@@ -326,7 +326,7 @@ public static class ContratosEndpoints
         }
         var res = await ContratoRenderer.Generar(p.Docx, data, ContratoServicio.ValoresExtra(new JsonArray(p.Campos.Select(x => (JsonNode)x!.DeepClone()).ToArray()), extra));
         c.Response.Headers["X-Aproximado"] = res.Aproximado ? "1" : "0";
-        return InquilinosEndpoints.PdfResponse(c, res.Pdf, "vista_previa.pdf");
+        return Descargas.Pdf(c, res.Pdf, "vista_previa.pdf");
     }
 
     // ── Generar contrato para un inquilino ──────────────────────────────────────────────────
@@ -519,7 +519,7 @@ public static class ContratosEndpoints
         var k = r.First ?? throw new AppError("Contrato no encontrado", 404);
         var nombre = Regex.Replace(k.S("nombre_completo") ?? "", @"\s+", "_");
         var baseName = $"contrato_{k.S("depto_numero")}_{nombre}_v{k.S("version")}";
-        return formato == "docx" ? Docx(c, (byte[])k["docx"]!, baseName + ".docx") : InquilinosEndpoints.PdfResponse(c, (byte[])k["pdf"]!, baseName + ".pdf");
+        return formato == "docx" ? Docx(c, (byte[])k["docx"]!, baseName + ".docx") : Descargas.Pdf(c, (byte[])k["pdf"]!, baseName + ".pdf");
     }
 
     static async Task<IResult> EliminarContrato(HttpContext c)
