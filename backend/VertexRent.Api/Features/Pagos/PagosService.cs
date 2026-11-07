@@ -220,6 +220,14 @@ public static class PagosService
         }).ToList();
     }
 
+    /// <summary>La imagen de un comprobante se pide aparte: los listados solo indican si existe (tiene_comprobante).</summary>
+    public static async Task<Dictionary<string, object?>> Comprobante(AuthUser u, string pagoId)
+    {
+        if (!await PagosRepository.PagoAccesible(pagoId, u)) throw new AppError("No autorizado", 403);
+        var imagen = await PagosRepository.ImagenDelComprobante(pagoId) ?? throw new AppError("Este pago no tiene comprobante", 404);
+        return new() { ["comprobante_url"] = imagen };
+    }
+
     // ── Abonos ───────────────────────────────────────────────────────────────
     public static async Task<List<Row>> Abonos(AuthUser u, string pagoId)
     {

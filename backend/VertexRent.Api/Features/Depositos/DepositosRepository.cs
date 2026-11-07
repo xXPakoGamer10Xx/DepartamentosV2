@@ -10,7 +10,9 @@ internal static class DepositosRepository
 
     public static async Task<List<Row>> Abonos(string inquilinoId) =>
         (await Db.Query(
-            @"SELECT a.*, u.nombre_completo AS registrado_por_nombre
+            @"SELECT a.id, a.inquilino_id, a.monto, a.fecha, a.metodo, a.nota, a.registrado_por, a.created_at,
+                     (a.comprobante_url IS NOT NULL) AS tiene_comprobante,
+                     u.nombre_completo AS registrado_por_nombre
               FROM abonos_deposito a
               LEFT JOIN usuarios u ON u.id = a.registrado_por
               WHERE a.inquilino_id = $1

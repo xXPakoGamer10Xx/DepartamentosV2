@@ -60,6 +60,10 @@ internal static class PagosRepository
               FROM pagos p JOIN inquilinos i ON i.id = p.inquilino_id
               WHERE p.id = $1 AND i.admin_id = $2", pagoId, adminId)).First;
 
+    /// <summary>La imagen del comprobante de un pago (null si no tiene).</summary>
+    public static async Task<string?> ImagenDelComprobante(string pagoId) =>
+        (await Db.Query("SELECT comprobante_url FROM pagos WHERE id = $1", pagoId)).First?.S("comprobante_url");
+
     public static Task MarcarEscaneo(string pagoId, string? actorId) =>
         Db.Query("UPDATE pagos SET escaneado_por = $2, escaneado_en = NOW() WHERE id = $1", pagoId, actorId);
 
@@ -86,7 +90,10 @@ internal static class PagosRepository
 
     public static async Task<List<Row>> Historial(string inquilinoId) =>
         (await Db.Query(
-            @"SELECT p.*,
+            @"SELECT p.id, p.inquilino_id, p.periodo, p.monto, p.metodo, p.qr_token, p.confirmado, p.confirmado_en,
+                     p.escaneado_por, p.escaneado_en, p.comprobante_subido_en, p.rechazado, p.rechazado_en, p.comentario_admin,
+                     p.created_at, p.updated_at, p.fecha_promesa,
+                     (p.comprobante_url IS NOT NULL) AS tiene_comprobante,
                      i.fecha_pago, i.nombre_completo, i.depto_numero,
                      u.nombre_completo AS escaneado_por_nombre,
                      COALESCE((SELECT c.valor FROM configuracion c
@@ -110,7 +117,7 @@ internal static class PagosRepository
         (await Db.Query(
             @"SELECT i.id AS inquilino_id, p.id AS pago_id, p.monto,
                      COALESCE(p.confirmado, false) AS confirmado, p.confirmado_en,
-                     COALESCE(p.rechazado, false) AS rechazado, p.comprobante_url,
+                     COALESCE(p.rechazado, false) AS rechazado, COALESCE(p.comprobante_url IS NOT NULL, false) AS tiene_comprobante,
                      COALESCE(ab.total_abonado, 0) AS total_abonado
               FROM inquilinos i
               LEFT JOIN pagos p ON p.inquilino_id = i.id AND p.periodo = $1
@@ -141,7 +148,9 @@ internal static class PagosRepository
 
     public static async Task<List<Row>> Abonos(string pagoId) =>
         (await Db.Query(
-            @"SELECT a.*, u.nombre_completo AS registrado_por_nombre
+            @"SELECT a.id, a.pago_id, a.monto, a.fecha, a.metodo, a.nota, a.registrado_por, a.created_at,
+                     (a.comprobante_url IS NOT NULL) AS tiene_comprobante,
+                     u.nombre_completo AS registrado_por_nombre
               FROM abonos_pago a
               LEFT JOIN usuarios u ON u.id = a.registrado_por
               WHERE a.pago_id = $1

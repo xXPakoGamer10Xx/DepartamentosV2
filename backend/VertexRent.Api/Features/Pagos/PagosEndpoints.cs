@@ -18,6 +18,7 @@ public static class PagosEndpoints
         a.MapGet("/estado/{inquilino_id}", H(async c => Api.Obj(200, (await PagosService.Estado(c.Me(), Api.Route(c, "inquilino_id"))).Select(kv => (kv.Key, kv.Value)).ToArray())))
             .InquilinoOrPermiso("pagos");
         a.MapPost("/comprobante/{inquilino_id}", H(SubirComprobante));
+        a.MapGet("/{pago_id}/comprobante", H(async c => Api.Data(await PagosService.Comprobante(c.Me(), Api.Route(c, "pago_id"))))).InquilinoOrPermiso("pagos");
         a.MapPost("/confirmar-admin/{pago_id}", H(async c => Resultado(await PagosService.ConfirmarPorAdmin(c.Me(), Api.Route(c, "pago_id"))))).Permiso("pagos.marcar");
         a.MapPost("/marcar-pagado/{inquilino_id}", H(MarcarPagado)).Permiso("pagos.marcar");
         a.MapDelete("/{pago_id}/cancelar", H(async c => { await PagosService.Cancelar(c.Me(), Api.Route(c, "pago_id")); return Api.Msg("Pago cancelado"); })).Permiso("pagos.marcar");
