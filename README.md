@@ -20,8 +20,8 @@ El sistema está optimizado para funcionar tanto en dispositivos móviles (Andro
 3. [📁 Estructura del Proyecto](#-estructura-del-proyecto)
 4. [🚀 Despliegue en Producción (VPS)](#-despliegue-en-producción-vps)
 5. [💻 Configuración para Desarrollo Local](#-configuración-para-desarrollo-local)
-6. [🔐 Variables de Entorno](#-variables-de-entorno)
-7. [👥 Credenciales de Prueba (Seed)](#-credenciales-de-prueba-seed)
+6. [🧪 Pruebas](#-pruebas) y [🔐 Variables de Entorno](#-variables-de-entorno)
+7. [👥 Primer uso y cuentas](#-primer-uso-y-cuentas)
 8. [💾 Copias de Seguridad (Backups)](#-copias-de-seguridad-backups)
 9. [🔌 API Endpoints](#-api-endpoints)
 
@@ -64,25 +64,26 @@ El sistema utiliza una arquitectura desacoplada y modular diseñada para la esca
 Departamentos/
 ├── web/                    # Frontend web / PWA (React + Vite + TypeScript)
 │   ├── src/pages/          # Pantallas (inquilino/, admin/, auth)
-│   ├── src/components/     # UI reutilizable y layout (sidebar / barra inferior)
-│   ├── src/lib/            # Cliente del API, sesión, SSE, push, permisos
+│   ├── src/components/     # UI reutilizable, layout y visor de PDF
+│   ├── src/lib/            # Cliente del API, sesión, SSE, push, permisos, fechas
 │   └── src/sw.ts           # Service worker (precache + Web Push)
 ├── backend/                # Backend API REST (ASP.NET Core / .NET 10)
 │   ├── VertexRent.Api/
 │   │   ├── Program.cs      # Arranque: middleware, CORS, límites, migraciones y servicios
-│   │   ├── Endpoints/      # Un archivo por módulo (auth, pagos, inquilinos, ...)
+│   │   ├── Features/       # Un módulo por carpeta (Pagos, Inquilinos, Contratos, Usuarios, ...)
+│   │   │   └── Pagos/      # Ejemplo de capas: PagosEndpoints (rutas) → PagosService (reglas) → PagosRepository (SQL)
 │   │   ├── Auth/           # JWT, filtros de autorización y catálogo de permisos
-│   │   ├── Services/       # Push/SSE, scheduler, respaldos, PDF, DOCX, Gemini
-│   │   ├── Templates/      # Plantilla de contrato del sistema (Word) y respaldo QuestPDF
-│   │   ├── Infrastructure/ # Acceso a datos (Npgsql), validación y helpers
-│   │   ├── Sql/            # startup.sql (migraciones idempotentes) y migrate.sql
+│   │   ├── Infrastructure/ # Acceso a datos (Npgsql), migraciones, validación y helpers
+│   │   ├── Sql/migrations/ # Migraciones versionadas NNNN_*.sql (se aplican solas al arrancar)
+│   │   ├── Templates/      # Plantilla de contrato base (Word)
 │   │   └── Fonts/          # Liberation Sans (SIL OFL) para los PDF
+│   ├── VertexRent.Api.Tests/ # Pruebas de integración (xUnit + PostgreSQL desechable con Docker)
 │   ├── Dockerfile          # Empaquetado Docker (frontend + backend)
-│   └── .env                # Configuración local del backend
-├── backups/                # Directorio automático para copias de seguridad (.sql)
-├── docker-compose.yml      # Definición de servicios para producción (API + DB)
+│   └── .env.example        # Plantilla de configuración del backend
+├── .github/workflows/      # ci.yml (pruebas) y deploy.yml (despliegue, solo si pasa el CI)
+├── docker-compose.yml      # Servicios para producción (API + DB)
 ├── dev.sh                  # Script interactivo de desarrollo local
-└── start.sh                # Script autogestionado de arranque en producción
+└── start.sh                # Script de arranque en producción
 ```
 
 ---
@@ -113,7 +114,7 @@ Tener instalados **Docker** y **Docker Compose** en tu servidor.
 - **Gestión de Variables**: Si no existe el archivo `.env` en la raíz, lo genera automáticamente a partir de la plantilla y solicita los ajustes necesarios de producción de manera segura.
 - **Aislamiento de Puertos (Seguridad)**: Configura la base de datos PostgreSQL en una red interna privada. El puerto `5432` no se expone a internet, evitando ataques externos de fuerza bruta.
 - **Construcción y Despliegue**: Levanta los contenedores en segundo plano (`db` y `backend`).
-- **Migraciones e Inicialización**: Ejecuta las migraciones de base de datos para estructurar las tablas e inserta los datos semilla iniciales (`seed`) sin necesidad de configuraciones manuales.
+- **Migraciones**: El backend aplica solo las migraciones pendientes (`Sql/migrations`) cada vez que arranca, también en el primer despliegue. `./start.sh --reset` borra TODA la base y exige escribir su nombre para confirmar.
 
 ---
 
@@ -137,6 +138,20 @@ Para trabajar localmente sin interferir con producción, el sistema cuenta con e
 
 ---
 
+## 🧪 Pruebas
+
+```bash
+# Backend: pruebas de integración contra un PostgreSQL 16 desechable (requiere Docker en marcha)
+dotnet test backend/VertexRent.Api.Tests
+
+# Web: tipos, lint y build
+cd web && npx tsc -b && npx oxlint && npm run build
+```
+
+El CI (`.github/workflows/ci.yml`) corre lo mismo en cada pull request, y el despliegue solo se ejecuta si pasa.
+
+---
+
 ## 🔐 Variables de Entorno
 
 El archivo `.env` se ubica en la raíz del proyecto. A continuación se listan las variables necesarias:
@@ -150,29 +165,24 @@ El archivo `.env` se ubica en la raíz del proyecto. A continuación se listan l
 | `DB_PORT` | `5432` | Puerto interno de PostgreSQL. |
 | `DB_NAME` | `departamentos` | Nombre de la base de datos. |
 | `DB_USER` | `depas_user` | Nombre de usuario de la base de datos. |
-| `DB_PASSWORD` | *Generado en arranque* | Contraseña de conexión a PostgreSQL. |
+| `DB_PASSWORD` | *Obligatoria* | Contraseña de PostgreSQL. En producción el backend no arranca si falta o es la de ejemplo; `docker compose` tampoco. |
 | `JWT_SECRET` | *Generado en arranque* | Secreto criptográfico de firma para tokens JWT de sesión. |
 | `JWT_EXPIRES_IN` | `7d` | Duración de validez de la sesión del usuario. |
+| `PLATFORM_ADMIN_EMAILS` | *Vacía* | Correos (separados por coma, en minúsculas y sin alias de Gmail) del dueño de la plataforma: los únicos con acceso a los respaldos globales de la base. Sin ella nadie puede crear ni descargar respaldos desde la app. |
+| `ADMIN_SIGNUP_CODE` | *Vacía* | Si se define, crear un administrador nuevo exige este código (instalación privada). Vacía = registro abierto. |
+| `CONFIRM_RESET` | *Vacía* | Solo para `--reset`: debe ser igual al nombre de la base para permitir borrarla. |
 | `BACKUP_CRON` | `0 4 * * *` | Formato cron de ejecución automática para respaldos diarios. |
 | `SOFFICE_PATH` | *Autodetectado* | Ruta de LibreOffice (`soffice`), que convierte el Word del contrato a PDF. En Docker ya viene instalado; en desarrollo se detecta en `/opt/homebrew/bin`, `/usr/bin` o `/Applications/LibreOffice.app` (`brew install --cask libreoffice`). Sin LibreOffice el PDF sale aproximado (sin tablas ni imágenes). |
 
 ---
 
-## 👥 Credenciales de Prueba (Seed)
+## 👥 Primer uso y cuentas
 
-Al iniciar el sistema por primera vez, el cargador de datos iniciales inserta los siguientes usuarios de pruebas:
+No hay usuarios ni contraseñas predefinidos. El registro es abierto: cualquiera puede crear su propia cuenta de administrador en `/register` y gestiona únicamente sus datos. Cada administrador invita a sus inquilinos y colaboradores con códigos desde `Configuración ➡️ Invitaciones`.
 
-### 👤 Administrador (Arrendador)
-- **Correo Electrónico**: `admin@departamentos.local`
-- **Contraseña**: `Admin2024!`
-
-### 🏠 Inquilino de Prueba (Depto 1)
-- **Nombre**: Valeria Irene Ortiz
-- **Correo Electrónico**: `inquilino@departamentos.local`
-- **Contraseña**: `Inquilino2024!`
-
-> [!WARNING]
-> Recuerda cambiar estas contraseñas en tu primer inicio de sesión para asegurar el control de tu información.
+- **Aislamiento**: cada administrador, y los colaboradores que invita, solo ve los datos de su propio espacio.
+- **Colaboradores**: acceden según los permisos que se les asignan (pagos, inquilinos, contratos, ...).
+- **Sesiones**: se cierran al desactivar al usuario o cambiar su contraseña.
 
 ---
 
@@ -183,10 +193,12 @@ El sistema incluye una tarea programada interna (`cron`) que crea respaldos auto
 - **Frecuencia**: Todos los días a las **4:00 AM (Hora de la CDMX)**.
 - **Ubicación**: Carpeta `./backups/` en la raíz del proyecto.
 - **Retención**: Los backups antiguos se eliminan automáticamente tras 30 días para optimizar espacio.
+- **Acceso**: contienen los datos de todos los administradores, por eso solo el dueño de la plataforma (`PLATFORM_ADMIN_EMAILS`) puede verlos y descargarlos.
+- **Antes de cada despliegue** el workflow guarda un respaldo adicional (los 5 últimos) en una carpeta privada junto al proyecto: `depas-respaldos-previos/`.
 
 ### Ejecución de Copia Manual
 Puedes generar copias de seguridad de forma instantánea de dos maneras:
-1. **Desde la App**: Menú `Configuración` ➡️ `Backups` ➡️ `Crear copia ahora`.
+1. **Desde la App** (solo dueño de la plataforma): Menú `Configuración` ➡️ `Respaldos` ➡️ `Crear copia ahora`.
 2. **Vía API REST**:
    ```bash
    curl -X POST http://localhost:3001/api/backups/manual \
@@ -221,9 +233,10 @@ A continuación se detallan los endpoints principales expuestos por el backend:
 - `POST /api/tickets` - Crear reporte de incidencia (por inquilino o admin).
 
 ### 🔔 Notificaciones, Sistema y Copias de Seguridad
-- `GET /api/events` - Canal en tiempo real (Server-Sent Events) para recibir notificaciones inmediatas.
+- `POST /api/events/ticket` - Boleto de 60 s para abrir el canal en tiempo real sin poner la sesión en la URL.
+- `GET /api/events?ticket=...` - Canal en tiempo real (Server-Sent Events).
 - `GET /api/notificaciones` - Historial de notificaciones del usuario logueado.
-- `POST /api/push/register` - Guardar token para notificaciones push en móviles.
+- `POST /api/push/web-subscribe` - Guardar la suscripción Web Push del navegador.
 - `GET /api/backups` - Listar archivos de respaldo disponibles en disco.
 - `POST /api/backups/manual` - Forzar la generación de una copia de seguridad.
 - `GET /api/config` - Consultar variables editables del arrendador.
