@@ -80,7 +80,9 @@ public sealed class ContratosTests(ApiFixture api)
         Assert.Equal(HttpStatusCode.OK, (await a.Post($"/api/contratos/plantillas/{id}/predeterminada")).Status);
 
         var (_, l) = await a.Get("/api/contratos/plantillas");
-        Assert.Equal("Renombrada", l!["data"]![0]!["nombre"]!.GetValue<string>()); // la predeterminada va primero
+        Assert.Equal("sistema", l!["data"]![0]!["id"]!.GetValue<string>()); // la del sistema siempre va primera
+        var propia = l["data"]!.AsArray().First(x => Str(x, "id") == id)!;
+        Assert.Equal("Renombrada", propia["nombre"]!.GetValue<string>()); Assert.True(propia["predeterminada"]!.GetValue<bool>());
         Assert.False(l["data"]!.AsArray().First(x => Str(x, "id") == "sistema")!["predeterminada"]!.GetValue<bool>());
 
         // aislamiento entre propietarios
