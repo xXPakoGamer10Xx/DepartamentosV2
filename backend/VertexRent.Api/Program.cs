@@ -59,6 +59,9 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
     p.WithMethods("GET", "POST", "PUT", "PATCH", "DELETE").WithHeaders("Content-Type", "Authorization");
 }));
 
+// Un solo pool de conexiones para toda la app; el contenedor lo cierra al apagar.
+builder.Services.AddSingleton<IDb>(_ => Database.DesdeEntorno());
+
 builder.Services.AddHostedService<SchedulerService>();
 builder.Services.AddHostedService<BackupCronService>();
 
@@ -86,7 +89,7 @@ foreach (var e in Env.PlatformEmailsNoCanonicos())
 
 try
 {
-    Db.Init();
+    Db.Usar(app.Services.GetRequiredService<IDb>());
     await Migrations.Apply();
     await ContratoMigracion.Run();
     // Mientras el dueño no tenga cuenta, cualquiera podría registrar esa dirección y heredar el acceso a los respaldos.
