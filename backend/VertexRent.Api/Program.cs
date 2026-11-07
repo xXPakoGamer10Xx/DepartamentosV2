@@ -80,6 +80,9 @@ if (IS_PROD && (string.IsNullOrEmpty(dbPass) || dbPass == "depas_secret_2024"))
     Environment.Exit(1);
 }
 
+foreach (var e in Env.PlatformEmailsNoCanonicos())
+    Console.Error.WriteLine($"⚠️  PLATFORM_ADMIN_EMAILS: '{e}' no está en su forma canónica y no coincidirá con cuentas nuevas (usa minúsculas, sin puntos ni +alias en Gmail).");
+
 try
 {
     Db.Init();

@@ -51,5 +51,24 @@ public static class Env
             .Any(p => string.Equals(p.ToLowerInvariant(), e, StringComparison.Ordinal));
     }
 
+    static IEnumerable<string> PlatformEmails() => (Get("PLATFORM_ADMIN_EMAILS") ?? "")
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(p => p.ToLowerInvariant());
+
+    /// <summary>
+    /// Un correo que se normaliza (alias de Gmail) a uno del dueño de la plataforma sin ser exactamente ese:
+    /// no se permite registrarlo, para que nadie lo use para confundirse con el dueño.
+    /// </summary>
+    public static bool IsPlatformAlias(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return false;
+        var e = email.Trim().ToLowerInvariant();
+        var canon = Validator.NormalizeEmail(e);
+        return PlatformEmails().Any(p => p != e && Validator.NormalizeEmail(p) == canon);
+    }
+
+    /// <summary>Entradas de PLATFORM_ADMIN_EMAILS que difieren de su forma canónica (nunca coincidirán con cuentas nuevas).</summary>
+    public static IEnumerable<string> PlatformEmailsNoCanonicos() =>
+        PlatformEmails().Where(p => Validator.NormalizeEmail(p) != p);
+
     public static string JwtSecret => Get("JWT_SECRET") ?? "";
 }

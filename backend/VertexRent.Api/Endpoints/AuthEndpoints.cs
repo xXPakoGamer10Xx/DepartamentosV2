@@ -95,6 +95,8 @@ public static class AuthEndpoints
         if (password.Length < 8) throw new AppError("La contraseña debe tener al menos 8 caracteres", 400);
 
         var userRol = rol == "admin" ? "admin" : "inquilino";
+        // No se puede registrar un alias del correo del dueño de la plataforma (mismo mensaje que un duplicado).
+        if (Env.IsPlatformAlias(email)) throw new AppError("Ya existe una cuenta con ese correo electrónico", 409);
 
         // Registro abierto (servicio): cualquiera puede crear su propia cuenta de administrador.
         // Si ADMIN_SIGNUP_CODE está definido, se vuelve a exigir (modo instalación privada).
