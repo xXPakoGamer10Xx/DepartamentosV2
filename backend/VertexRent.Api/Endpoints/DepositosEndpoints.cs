@@ -6,20 +6,18 @@ public static class DepositosEndpoints
     {
         var g = app.MapGroup("/api/depositos").Auth();
 
-        g.MapPost("/abono", H(RegistrarAbono)).CobradorOrAdmin();
+        g.MapPost("/abono", H(RegistrarAbono)).Permiso("pagos.marcar");
         g.MapPut("/abono/{abono_id}", H(EditarAbono)).AdminOnly();
         g.MapDelete("/abono/{abono_id}", H(EliminarAbono)).AdminOnly();
-        g.MapGet("/{inquilino_id}/saldo", H(Saldo));
-        g.MapGet("/{inquilino_id}/abonos", H(Abonos));
+        g.MapGet("/{inquilino_id}/saldo", H(Saldo)).InquilinoOrPermiso("pagos");
+        g.MapGet("/{inquilino_id}/abonos", H(Abonos)).InquilinoOrPermiso("pagos");
     }
 
     static async Task<Row?> CheckOwnership(HttpContext c, string select, string inquilinoId)
     {
         var u = c.Me();
-        var authCheck = u.Rol == "inquilino" ? "AND usuario_id = $2" : u.Rol == "admin" ? "AND admin_id = $2" : "";
-        var r = u.Rol == "cobrador"
-            ? await Db.Query($"SELECT {select} FROM inquilinos WHERE id = $1 {authCheck}", inquilinoId)
-            : await Db.Query($"SELECT {select} FROM inquilinos WHERE id = $1 {authCheck}", inquilinoId, u.Id);
+        var authCheck = u.Rol == "inquilino" ? "AND usuario_id = $2" : "AND admin_id = $2";
+        var r = await Db.Query($"SELECT {select} FROM inquilinos WHERE id = $1 {authCheck}", inquilinoId, u.Id);
         return r.First;
     }
 
@@ -57,17 +55,15 @@ public static class DepositosEndpoints
         if (double.IsNaN(monto) || monto <= 0) throw new AppError("El monto del abono debe ser mayor a 0", 400);
 
         var u = c.Me();
-        var inqRes = u.Rol == "admin"
-            ? await Db.Query("SELECT * FROM inquilinos WHERE id = $1 AND admin_id = $2 AND estado = 'activo'", b["inquilino_id"], u.Id)
-            : await Db.Query("SELECT * FROM inquilinos WHERE id = $1  AND estado = 'activo'", b["inquilino_id"]);
+        var inqRes = await Db.Query("SELECT * FROM inquilinos WHERE id = $1 AND admin_id = $2 AND estado = 'activo'", b["inquilino_id"], u.Id);
         var inquilino = inqRes.First ?? throw new AppError("Inquilino no encontrado o no autorizado", 404);
 
         var metodo = Js.T(b["metodo"]) ? b.S("metodo") : (string.IsNullOrEmpty(inquilino.S("metodo_pago")) ? "efectivo" : inquilino.S("metodo_pago"));
         var abono = await Db.Query(
             @"INSERT INTO abonos_deposito (inquilino_id, monto, fecha, metodo, nota, comprobante_url, registrado_por)
               VALUES ($1, $2, COALESCE($3, CURRENT_DATE), $4, $5, $6, $7) RETURNING *",
-            b["inquilino_id"], monto, Js.T(b["fecha"]) ? b.S("fecha") : null, metodo,
-            Js.T(b["nota"]) ? b.S("nota") : null, Js.T(b["comprobante_url"]) ? b.S("comprobante_url") : null, u.Actor);
+            b["inquilino_id"], monto, Inputs.Fecha(b["fecha"], "fecha"), metodo,
+            Js.T(b["nota"]) ? b.S("nota") : null, Inputs.Imagen(b["comprobante_url"], "comprobante_url"), u.Actor);
 
         var pagado = (await Db.Query("SELECT COALESCE(SUM(monto), 0) AS pagado FROM abonos_deposito WHERE inquilino_id = $1", b["inquilino_id"])).First!.D("pagado");
         var saldo = Math.Max(inquilino.D("deposito") - pagado, 0);
@@ -98,6 +94,7 @@ public static class DepositosEndpoints
             var m = Js.ParseFloat(b["monto"]);
             if (double.IsNaN(m) || m <= 0) throw new AppError("El monto del abono debe ser mayor a 0", 400);
         }
+        Inputs.Fecha(b["fecha"], "fecha");
 
         var updated = await Db.Query(
             @"UPDATE abonos_deposito SET

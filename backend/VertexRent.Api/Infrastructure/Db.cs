@@ -40,7 +40,7 @@ public static class Db
             Port = int.TryParse(Env.Get("DB_PORT"), out var p) ? p : 5432,
             Database = Env.Get("DB_NAME", "departamentos"),
             Username = Env.Get("DB_USER", "depas_user"),
-            Password = Env.Get("DB_PASSWORD", "depas_secret_2024"),
+            Password = Env.Get("DB_PASSWORD", Env.IsProd ? "" : "depas_secret_2024"), // en producción Program.cs exige una propia
             MaxPoolSize = 20,
             Timeout = 15,
         };

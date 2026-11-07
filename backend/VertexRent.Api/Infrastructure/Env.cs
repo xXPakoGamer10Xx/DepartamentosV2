@@ -38,5 +38,15 @@ public static class Env
 
     public static bool IsProd => Get("NODE_ENV") == "production" || Get("ASPNETCORE_ENVIRONMENT") == "Production";
     public static bool IsDev => Get("NODE_ENV") == "development";
+    /// <summary>Dueño de la plataforma: correo listado en PLATFORM_ADMIN_EMAILS (sin la variable, nadie lo es).</summary>
+    public static bool IsPlatformAdmin(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return false;
+        var permitidos = (Get("PLATFORM_ADMIN_EMAILS") ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(Validator.NormalizeEmail);
+        return permitidos.Contains(Validator.NormalizeEmail(email));
+    }
+
     public static string JwtSecret => Get("JWT_SECRET") ?? "";
 }

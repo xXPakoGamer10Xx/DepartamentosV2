@@ -108,13 +108,13 @@ public static class PushService
         if (stale.Count > 0) await Db.Query("DELETE FROM web_push_subscriptions WHERE endpoint = ANY($1)", stale);
     }
 
-    public static async Task CreateAndSendNotification(string usuarioId, string title, string body, string tipo)
+    public static async Task CreateAndSendNotification(string usuarioId, string title, string body, string tipo, string? dedupeKey = null)
     {
         try
         {
             // 1. Guardar en BD (panel histórico web)
-            await Db.Query("INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo) VALUES ($1, $2, $3, $4)",
-                usuarioId, title, body, tipo);
+            await Db.Query("INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo, dedupe_key) VALUES ($1, $2, $3, $4, $5)",
+                usuarioId, title, body, tipo, dedupeKey);
 
             // 2. SSE si está conectado en web
             SseService.EmitToUser(usuarioId, "notification_new", new { title, mensaje = body, tipo });
@@ -134,9 +134,9 @@ public static class PushService
     }
 
     /// <summary>Notificación de cobranza: al admin Y a sus colaboradores con permiso 'notificaciones.pagos'.</summary>
-    public static async Task NotificarEquipoPagos(string adminId, string title, string body, string tipo = "pago")
+    public static async Task NotificarEquipoPagos(string adminId, string title, string body, string tipo = "pago", string? dedupeKey = null)
     {
-        try { await CreateAndSendNotification(adminId, title, body, tipo); } catch { }
+        try { await CreateAndSendNotification(adminId, title, body, tipo, dedupeKey); } catch (Exception ex) { Console.Error.WriteLine($"Error al notificar al admin: {ex.Message}"); }
         try
         {
             var r = await Db.Query(
@@ -145,7 +145,7 @@ public static class PushService
                     AND permisos @> '[""notificaciones.pagos""]'::jsonb", adminId);
             foreach (var row in r.Rows)
             {
-                try { await CreateAndSendNotification(row.S("id")!, title, body, tipo); } catch { }
+                try { await CreateAndSendNotification(row.S("id")!, title, body, tipo, dedupeKey); } catch (Exception ex) { Console.Error.WriteLine($"Error al notificar a un colaborador: {ex.Message}"); }
             }
         }
         catch (Exception ex)

@@ -237,6 +237,13 @@ public static class InquilinosEndpoints
         var u = c.Me();
         var check = await Db.Query("SELECT id FROM inquilinos WHERE admin_id = $1 AND id = $2", u.Id, id);
         if (check.First == null) throw new AppError("Inquilino no encontrado", 404);
+        // Solo se puede vincular una cuenta de inquilino que pertenezca a este propietario.
+        if (Js.T(b["usuario_id"]))
+        {
+            var cuenta = await Db.Query(
+                "SELECT 1 FROM usuarios WHERE id = $1 AND rol = 'inquilino' AND admin_id = $2", b["usuario_id"], u.Id);
+            if (cuenta.First == null) throw new AppError("Usuario no encontrado o no autorizado", 404);
+        }
         var r = await Db.Query(
             "UPDATE inquilinos SET usuario_id = $1 WHERE admin_id = $2 AND id = $3 RETURNING id, nombre_completo, usuario_id",
             Js.T(b["usuario_id"]) ? b["usuario_id"] : null, u.Id, id);
