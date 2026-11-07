@@ -27,7 +27,9 @@ public static class IneService
         var mime = m.Success ? m.Groups[1].Value : "image/jpeg";
 
         var raw = (await GeminiService.Generate(apiKey, Prompt, (mime, datos))).Trim();
-        Console.WriteLine($"[extraerIne] respuesta del modelo: {raw[..Math.Min(300, raw.Length)]}");
+        // La respuesta trae datos personales de una identificación: en logs solo metadatos (el texto, solo en desarrollo).
+        Console.WriteLine($"[extraerIne] respuesta del modelo: {raw.Length} caracteres");
+        if (Env.IsDev) Console.WriteLine($"[extraerIne] (dev) {raw[..Math.Min(300, raw.Length)]}");
         try
         {
             var ini = raw.IndexOf('{'); var fin = raw.LastIndexOf('}');
@@ -36,7 +38,8 @@ public static class IneService
         }
         catch
         {
-            Console.Error.WriteLine($"[extraerIne] texto recibido: {raw}");
+            Console.Error.WriteLine($"[extraerIne] la respuesta no era JSON válido ({raw.Length} caracteres)");
+            if (Env.IsDev) Console.Error.WriteLine($"[extraerIne] (dev) texto recibido: {raw}");
             throw new AppError("El modelo no devolvió JSON válido. Intenta con una imagen más clara o mejor iluminación.", 422);
         }
     }

@@ -78,7 +78,9 @@ public static class ContratoAnalisisService
         try { if (ini >= 0 && fin > ini) arr = JsonNode.Parse(raw[ini..(fin + 1)]) as JsonArray; } catch { }
         if (arr == null)
         {
-            Console.Error.WriteLine($"Análisis IA sin resultados utilizables: {raw[..Math.Min(300, raw.Length)]}");
+            // El texto es parte de un contrato (nombres, montos): fuera de los logs salvo en desarrollo.
+            Console.Error.WriteLine($"Análisis IA sin resultados utilizables ({raw.Length} caracteres)");
+            if (Env.IsDev) Console.Error.WriteLine($"(dev) {raw[..Math.Min(300, raw.Length)]}");
             throw new AppError("La IA no devolvió una respuesta válida", 502);
         }
 
