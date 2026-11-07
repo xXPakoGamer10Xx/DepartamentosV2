@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { registerSW } from 'virtual:pwa-register'
 import App from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { VisorPdfHost } from './components/VisorPdf'
 import { ToastProvider } from './components/ui/Toast'
 import { AuthProvider } from './lib/auth'
 import './index.css'
@@ -24,6 +25,7 @@ createRoot(document.getElementById('root')!).render(
         <AuthProvider>
           <ToastProvider>
             <App />
+            <VisorPdfHost />
           </ToastProvider>
         </AuthProvider>
       </BrowserRouter>
