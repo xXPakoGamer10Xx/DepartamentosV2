@@ -123,7 +123,7 @@ export default function InquilinoHome() {
                 {pago?.confirmado && pago.confirmado_en && <p className="text-xs text-fg-2">{fechaHora(pago.confirmado_en)}</p>}
               </div>
               <p className="text-xl font-extrabold">
-                <AnimatedNumber value={num(pago ? pago.monto : inq.renta)} format={money} />
+                <AnimatedNumber value={!pago?.confirmado && totalAbonado > 0 ? saldo : num(pago ? pago.monto : inq.renta)} format={money} />
               </p>
             </div>
             {!pago?.confirmado && totalAbonado > 0 && (

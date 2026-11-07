@@ -17,20 +17,22 @@ import { Stat } from '../../components/ui/Stat'
 import { useToast } from '../../components/ui/Toast'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
-import { diaPago, EPS, puedeCancelar, rowState, toSaldo, type EstadoActual, type RowState, type Saldo } from '../../lib/cobranza'
+import { diaPago, EPS, puedeCancelar, restanteMes, rowState, toSaldo, type EstadoActual, type RowState, type Saldo } from '../../lib/cobranza'
 import { iniciales, money, num, periodoLabel } from '../../lib/format'
 import { useSSE } from '../../lib/sse'
 import type { Inquilino } from '../../lib/types'
 import { nombreVisible } from '../../lib/nombre'
 
 /** Monto grande de la card según el filtro activo, para que el número coincida con lo que se está viendo. */
-function montoDeCard(tab: string, renta: number, s?: Saldo): { valor: number; caption: string; tone: string } {
+function montoDeCard(tab: string, renta: number, s?: Saldo, resta?: number, abonado = 0): { valor: number; caption: string; tone: string } {
   if (s) {
     if (tab === 'atrasados') return { valor: s.vencida, caption: 'Debe de renta', tone: 'text-danger' }
     if (tab === 'cuotas_extra') return { valor: s.cuotasExtra, caption: 'Cuota extra', tone: 'text-warning' }
     if (tab === 'deposito') return { valor: s.deposito, caption: 'Falta de depósito', tone: 'text-primary' }
     if (tab === 'pendientes') return { valor: s.total, caption: 'Por pagar', tone: '' }
   }
+  // Con abonos en el mes, el número grande es lo que FALTA, no la renta completa.
+  if (resta !== undefined && abonado > 0) return { valor: resta, caption: 'Resta de la renta', tone: '' }
   return { valor: renta, caption: 'Renta', tone: '' }
 }
 
@@ -92,10 +94,10 @@ export default function Pagos() {
     const vencido = lista.reduce((a, i) => a + (saldos.get(i.id)?.vencida ?? 0), 0)
     const sum = (f: (s: Saldo) => number) => lista.reduce((a, i) => a + f(saldos.get(i.id) ?? { total: 0, vencida: 0, periodoVencido: null, cuotasExtra: 0, deposito: 0 }), 0)
     let valor = 0, label = 'Por recaudar total', sub = ''
-    if (tab === 'pagados' || tab === 'pendientes') { valor = rows.filter(r => r.state === 'pendiente' || r.state === 'atrasado').reduce((a, r) => a + num(r.i.renta), 0); label = 'Rentas por cobrar'
+    if (tab === 'pagados' || tab === 'pendientes') { valor = rows.filter(r => r.state === 'pendiente' || r.state === 'atrasado').reduce((a, r) => a + restanteMes(estados.get(r.i.id), num(r.i.renta)), 0); label = 'Rentas por cobrar'
       sub = counts.pendientes === 0 ? 'Todo cobrado' : `${counts.pendientes} inquilino(s) por pagar${counts.atrasados ? ` · ${counts.atrasados} con atraso` : ''}`
       if (tab === 'pagados') sub = `${counts.pagados} de ${counts.todos} inquilino(s) ya pagaron` }
-    else if (tab === 'revision') { valor = rows.filter(r => r.state === 'revision').reduce((a, r) => a + num(r.i.renta), 0); label = 'En revisión'; sub = `${counts.revision} comprobante(s) por revisar` }
+    else if (tab === 'revision') { valor = rows.filter(r => r.state === 'revision').reduce((a, r) => a + restanteMes(estados.get(r.i.id), num(r.i.renta)), 0); label = 'En revisión'; sub = `${counts.revision} comprobante(s) por revisar` }
     else if (tab === 'atrasados') { valor = vencido; label = 'Dinero atrasado'; sub = `${counts.atrasados} inquilino(s) con atraso` }
     else if (tab === 'cuotas_extra') { valor = sum(s => s.cuotasExtra); label = 'Cuotas extra'; sub = `${counts.cuotas_extra} inquilino(s) pendiente(s)` }
     else if (tab === 'deposito') { valor = sum(s => s.deposito); label = 'Falta depósito'; sub = `${counts.deposito} inquilino(s) sin depósito` }
@@ -106,7 +108,7 @@ export default function Pagos() {
     }
     const spei = lista.filter(i => i.metodo_pago === 'transferencia' || i.metodo_pago === 'ambos').length
     return { esperado, recaudado, pct: esperado > 0 ? Math.round((recaudado / esperado) * 100) : 0, valor, label, sub, speiPct: lista.length ? Math.round((spei / lista.length) * 100) : 0 }
-  }, [lista, rows, saldos, tab, counts])
+  }, [lista, rows, saldos, estados, tab, counts])
 
   const visibles = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -241,7 +243,8 @@ export default function Pagos() {
         <StaggerList key={`${tab}-${sort}`} className="space-y-3">
         {visibles.map(({ i, state }) => {
           const e = estados.get(i.id); const s = saldos.get(i.id); const chip = CHIP[state]
-          const monto = montoDeCard(tab, num(i.renta), s)
+          const abonado = num(e?.total_abonado)
+          const monto = montoDeCard(tab, num(i.renta), s, state === 'pagado' ? undefined : restanteMes(e, num(i.renta)), abonado)
           const transfer = i.metodo_pago === 'transferencia' || i.metodo_pago === 'ambos'
           const busy = (marcar.isPending && marcar.variables?.id === i.id) || (validar.isPending && validar.variables === e?.pago_id)
           return (
