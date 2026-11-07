@@ -38,14 +38,17 @@ public static class Env
 
     public static bool IsProd => Get("NODE_ENV") == "production" || Get("ASPNETCORE_ENVIRONMENT") == "Production";
     public static bool IsDev => Get("NODE_ENV") == "development";
-    /// <summary>Dueño de la plataforma: correo listado en PLATFORM_ADMIN_EMAILS (sin la variable, nadie lo es).</summary>
+    /// <summary>
+    /// Dueño de la plataforma: el correo guardado coincide EXACTAMENTE (sin distinguir mayúsculas) con uno de
+    /// PLATFORM_ADMIN_EMAILS. No se normaliza (puntos/+alias de Gmail): un alias no debe heredar el privilegio.
+    /// </summary>
     public static bool IsPlatformAdmin(string? email)
     {
         if (string.IsNullOrWhiteSpace(email)) return false;
-        var permitidos = (Get("PLATFORM_ADMIN_EMAILS") ?? "")
+        var e = email.Trim().ToLowerInvariant();
+        return (Get("PLATFORM_ADMIN_EMAILS") ?? "")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(Validator.NormalizeEmail);
-        return permitidos.Contains(Validator.NormalizeEmail(email));
+            .Any(p => string.Equals(p.ToLowerInvariant(), e, StringComparison.Ordinal));
     }
 
     public static string JwtSecret => Get("JWT_SECRET") ?? "";
