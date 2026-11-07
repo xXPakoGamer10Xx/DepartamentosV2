@@ -180,8 +180,8 @@ export const api = {
   getComprobantesPendientes: () => request<(Pick<Pago, 'id' | 'monto' | 'periodo' | 'comprobante_url' | 'comprobante_subido_en'> & { nombre_completo: string; depto_numero: number; inquilino_id: string })[]>('GET', '/pagos/comprobantes-pendientes'),
   getHistorialPagos: (inquilinoId: string) => request<(Pago & { tiene_comprobante: boolean; a_tiempo: boolean | null; fecha_pago: string; escaneado_por_nombre: string | null })[]>('GET', `/pagos/historial/${inquilinoId}`),
 
-  registrarAbono: (d: { inquilino_id: string; periodo?: string; monto: number; fecha?: string; metodo?: string; nota?: string; comprobante_url?: string }) =>
-    request<{ abono: Abono; pago: Pago; totalAbonado: number; saldoPendiente: number }>('POST', '/pagos/abono', d),
+  registrarAbono: (d: { inquilino_id: string; periodo?: string; aplicar_a_deuda_antigua?: boolean; monto: number; fecha?: string; metodo?: string; nota?: string; comprobante_url?: string }) =>
+    request<{ abono: Abono; pago: Pago; totalAbonado: number; saldoPendiente: number; aplicado?: { periodo: string; monto: number }[] }>('POST', '/pagos/abono', d),
   getAbonosPago: (pagoId: string) => request<Abono[]>('GET', `/pagos/abonos/${pagoId}`),
   editarAbono: (id: string, d: { monto?: number; fecha?: string; metodo?: string; nota?: string }) =>
     request<{ abono: Abono; pago: Pago; totalAbonado: number; saldoPendiente: number }>('PUT', `/pagos/abono/${id}`, d),

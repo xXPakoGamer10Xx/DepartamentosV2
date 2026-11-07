@@ -8,7 +8,7 @@ import { Textarea } from '../../../components/ui/Textarea'
 import { useToast } from '../../../components/ui/Toast'
 import { api } from '../../../lib/api'
 import { hoyISO } from '../../../lib/cobranza'
-import { num, periodoLabel } from '../../../lib/format'
+import { money, num, periodoLabel } from '../../../lib/format'
 import type { Abono } from '../../../lib/types'
 import { errMsg } from './comun'
 
@@ -36,9 +36,15 @@ export function AbonoForm({ state, inquilinoId, metodoDefault, onSaved }: { stat
       const m = parseFloat(monto)
       const body = { monto: m, fecha: fechaV || undefined, metodo, nota: nota.trim() || undefined }
       if (state.tipo === 'deposito') return a ? api.editarAbonoDeposito(a.id, body) : api.registrarAbonoDeposito({ inquilino_id: inquilinoId, ...body })
-      return a ? api.editarAbono(a.id, body) : api.registrarAbono({ inquilino_id: inquilinoId, periodo: state.periodo, ...body })
+      if (a) return api.editarAbono(a.id, body)
+      // Sin un mes elegido, el abono paga primero el mes más antiguo con adeudo (un abono al mes actual no baja un atraso anterior).
+      return api.registrarAbono({ inquilino_id: inquilinoId, periodo: state.periodo, aplicar_a_deuda_antigua: !state.periodo, ...body })
     },
-    onSuccess: () => { toast('Abono guardado', 'success'); onSaved() },
+    onSuccess: (res) => {
+      const aplicado = 'aplicado' in (res.data ?? {}) ? (res.data as { aplicado?: { periodo: string; monto: number }[] }).aplicado : undefined
+      toast(aplicado?.length ? `Abono aplicado a ${aplicado.map(x => `${periodoLabel(x.periodo)} (${money(x.monto)})`).join(' y ')}` : 'Abono guardado', 'success')
+      onSaved()
+    },
     onError: (e) => setError(errMsg(e, 'No se pudo guardar el abono')),
   })
   const submit = () => {
@@ -53,6 +59,9 @@ export function AbonoForm({ state, inquilinoId, metodoDefault, onSaved }: { stat
         <Input label="Fecha" type="date" value={fechaV} max={hoyISO()} onChange={e => setFechaV(e.target.value)} />
         <Select label="Método" value={metodo} onChange={e => setMetodo(e.target.value)}><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option></Select>
       </div>
+      {state.tipo === 'renta' && !a && !state.periodo && (
+        <p className="rounded-xl bg-primary-soft px-4 py-3 text-xs text-fg-2">Se aplica primero al mes más antiguo con adeudo y, si sobra, al siguiente. Para abonar a un mes en particular usa el botón <b>Abonar</b> junto a ese mes.</p>
+      )}
       <Textarea label="Nota (opcional)" className="min-h-20" value={nota} onChange={e => setNota(e.target.value)} />
       {error && <p role="alert" className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p>}
       <div className="pt-2">

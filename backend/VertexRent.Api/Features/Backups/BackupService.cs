@@ -62,6 +62,20 @@ public static class BackupService
         }
     }
 
+    /// <summary>Los respaldos que genera la app se llaman backup_AAAA-MM-DDTHH-mm-ss-fffZ.sql.</summary>
+    static readonly System.Text.RegularExpressions.Regex NombreGenerado =
+        new(@"^backup_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.sql$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// Borra los respaldos generados por la app con más de 30 días. Los archivos puestos a mano (otro nombre) no se tocan.
+    /// </summary>
+    internal static void LimpiarAntiguos(string dir, DateTime ahora)
+    {
+        var limite = ahora.AddDays(-30);
+        foreach (var f in Directory.GetFiles(dir, "*.sql"))
+            if (NombreGenerado.IsMatch(Path.GetFileName(f)) && File.GetLastWriteTime(f) < limite) File.Delete(f);
+    }
+
     public static async Task<(string archivo, long tamano)> RunBackup()
     {
         var dir = Env.Get("BACKUP_DIR", "./backups");
@@ -76,10 +90,7 @@ public static class BackupService
         var size = new FileInfo(filepath).Length;
         await BackupsRepository.Registrar(filename, size, "completado");
 
-        // Limpiar backups con más de 30 días
-        var cutoff = DateTime.Now.AddDays(-30);
-        foreach (var f in Directory.GetFiles(dir, "*.sql"))
-            if (File.GetLastWriteTime(f) < cutoff) File.Delete(f);
+        LimpiarAntiguos(dir, DateTime.Now);
 
         Console.WriteLine($"✅ Backup completado: {filename} ({size} bytes)");
         return (filename, size);

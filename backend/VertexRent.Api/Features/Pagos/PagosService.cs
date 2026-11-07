@@ -251,6 +251,11 @@ public static class PagosService
 
         var inquilino = await InquilinosRepository.ActivoDelPropietario(b.S("inquilino_id"), u.Id)
             ?? throw new AppError("Inquilino no encontrado o no autorizado", 404);
+
+        // Sin periodo y con la bandera, el abono paga primero el mes más antiguo con adeudo (y reparte el sobrante).
+        var aDeudaAntigua = b["aplicar_a_deuda_antigua"] is JsonValue fv && fv.TryGetValue<bool>(out var f) && f;
+        if (aDeudaAntigua && !Js.T(b["periodo"])) return await RegistrarAbonoADeudaAntigua(u, b, inquilino, (decimal)monto);
+
         var periodo = Js.T(b["periodo"]) ? b.S("periodo")! : Js.CurrentPeriodo();
         if (!Inputs.EsPeriodo(periodo)) throw new AppError("El periodo debe tener el formato AAAA-MM", 400);
         var pago = await GetOrCrearPago(inquilino, periodo);
@@ -270,6 +275,54 @@ public static class PagosService
                     $"Se registró un abono de ${Js.NumMx(monto)} a tu renta de {periodo}. Saldo pendiente: ${Js.NumMx((double)rec.SaldoPendiente)}", "pago"));
         }
         return ResultadoAbono(abono, rec);
+    }
+
+    /// <summary>
+    /// Aplica un abono empezando por el mes más antiguo con adeudo y pasando al siguiente con lo que sobre (un abono al mes
+    /// actual no rebaja un atraso anterior). Si supera el adeudo total se rechaza sin aplicar nada.
+    /// </summary>
+    static async Task<Dictionary<string, object?>> RegistrarAbonoADeudaAntigua(AuthUser u, JsonObject b, Row inquilino, decimal monto)
+    {
+        var inquilinoId = inquilino.S("id")!;
+        var datos = await InquilinosRepository.Accesible(inquilinoId, u, "id, renta, fecha_inicio::text AS fecha_inicio_txt")
+            ?? throw new AppError("Inquilino no encontrado o no autorizado", 404);
+        var pendientes = (await PagosRepository.SaldoDetalle(inquilinoId, datos.S("fecha_inicio_txt"), datos.S("renta")))
+            .Where(r => r.D("saldo") > 0.005m).ToList();
+        if (pendientes.Count == 0) throw new AppError("No hay adeudo pendiente: el inquilino está al corriente", 400);
+        var deuda = pendientes.Sum(r => r.D("saldo"));
+        if (monto > deuda + 0.01m)
+            throw new AppError($"El abono (${Js.NumMx((double)monto)}) supera el adeudo total (${Js.NumMx((double)deuda)})", 400);
+
+        var fecha = Inputs.Fecha(b["fecha"], "fecha");
+        var metodo = Js.T(b["metodo"]) ? b.S("metodo") : Metodo(inquilino);
+        var nota = Js.T(b["nota"]) ? b.S("nota") : null;
+        var imagen = Inputs.Imagen(b["comprobante_url"], "comprobante_url");
+        var usuarioId = inquilino.S("usuario_id");
+
+        var restante = monto;
+        var aplicado = new List<object?>();
+        Row? ultimoAbono = null; RecalculoPago? ultimo = null;
+        foreach (var fila in pendientes)
+        {
+            if (restante <= 0.005m) break;
+            var parte = Math.Min(restante, fila.D("saldo"));
+            var periodo = fila.S("periodo")!;
+            var pago = await GetOrCrearPago(inquilino, periodo);
+            if (pago.B("confirmado")) continue;
+            var (abono, rec) = await SaldoService.RegistrarAbono(pago.S("id")!, parte, fecha, metodo, nota, imagen, u.Actor);
+            restante -= parte; ultimoAbono = abono; ultimo = rec;
+            aplicado.Add(new Dictionary<string, object?> { ["periodo"] = periodo, ["monto"] = (double)parte });
+            if (rec.Completo) AvisarConfirmado(usuarioId, ConDatos(rec.Pago, inquilino.S("nombre_completo"), inquilino.I("depto_numero")), $"Tu pago de {periodo} fue confirmado");
+        }
+
+        if (ultimo is null) throw new AppError("No se pudo aplicar el abono", 400);
+        if (!string.IsNullOrEmpty(usuarioId) && !ultimo.Completo)
+            Js.Bg(() => PushService.CreateAndSendNotification(usuarioId, "💰 Abono registrado",
+                $"Se registró un abono de ${Js.NumMx((double)monto)} a tu renta. Saldo pendiente total: ${Js.NumMx((double)(deuda - monto))}", "pago"));
+
+        var resultado = ResultadoAbono(ultimoAbono, ultimo);
+        resultado["aplicado"] = aplicado;
+        return resultado;
     }
 
     public static async Task<Dictionary<string, object?>> EditarAbono(AuthUser u, string abonoId, JsonObject b)
