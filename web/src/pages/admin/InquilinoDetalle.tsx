@@ -120,7 +120,7 @@ export default function InquilinoDetalle() {
         <Seccion titulo="Pagos y depósito" icon={<Wallet className="size-4" />}>
           <Fila label="Método de pago" value={inq.metodo_pago ? METODO[inq.metodo_pago] : '—'} />
           <Fila label="Depósito" value={deposito > 0 ? money(deposito) : 'Sin depósito'} />
-          {deposito > 0 && <Fila label="Modalidad" value={inq.deposito_tipo === 'quincenas' ? 'Dos quincenas' : inq.deposito_tipo === 'personalizado' ? 'Pagos mensuales' : 'Al inicio del contrato'} />}
+          {deposito > 0 && <Fila label="Modalidad" value={inq.deposito_tipo === 'quincenas' ? 'Dos quincenas' : inq.deposito_tipo === 'personalizado' ? 'Pagos mensuales' : inq.deposito_tipo === 'fechas' ? 'Fechas personalizadas' : 'Al inicio del contrato'} />}
           {!!inq.deposito_fechas?.length && <Fila label="Fechas" value={inq.deposito_fechas.map(f => fecha(f)).join(' · ')} />}
         </Seccion>
 
