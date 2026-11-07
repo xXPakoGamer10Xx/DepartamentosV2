@@ -8,6 +8,13 @@ var IS_PROD = Env.IsProd;
 // ── Modo migración: `dotnet VertexRent.Api.dll --migrate` ────────────────────
 if (args.Contains("--migrate"))
 {
+    // DESTRUCTIVO (DROP de tablas): exige confirmar escribiendo el nombre de la base en CONFIRM_RESET.
+    var dbName = Env.Get("DB_NAME", "departamentos");
+    if (Env.Get("CONFIRM_RESET") != dbName)
+    {
+        Console.Error.WriteLine($"❌ --migrate borra TODAS las tablas de '{dbName}'. Para continuar define CONFIRM_RESET={dbName}.");
+        Environment.Exit(1);
+    }
     Db.Init();
     await Migrations.RunFullMigrate();
     return;
@@ -65,6 +72,17 @@ if (IS_PROD && (string.IsNullOrEmpty(secret) || secret.Length < 32 || inseguros.
     Environment.Exit(1);
 }
 
+// Guard de seguridad: en producción la contraseña de la base de datos no puede faltar ni ser la de ejemplo.
+var dbPass = Env.Get("DB_PASSWORD");
+if (IS_PROD && (string.IsNullOrEmpty(dbPass) || dbPass == "depas_secret_2024"))
+{
+    Console.Error.WriteLine("❌ DB_PASSWORD ausente o igual a la de ejemplo en producción. Define una contraseña propia en el .env.");
+    Environment.Exit(1);
+}
+
+foreach (var e in Env.PlatformEmailsNoCanonicos())
+    Console.Error.WriteLine($"⚠️  PLATFORM_ADMIN_EMAILS: '{e}' no está en su forma canónica y no coincidirá con cuentas nuevas (usa minúsculas, sin puntos ni +alias en Gmail).");
+
 try
 {
     Db.Init();
@@ -84,16 +102,24 @@ fwd.KnownIPNetworks.Clear();
 fwd.KnownProxies.Clear();
 app.UseForwardedHeaders(fwd);
 
-// Manejo global de errores (equivalente a error.middleware): {success:false,message}
+// Manejo global de errores: {success:false,message}. Los 500 nunca exponen detalles internos.
 app.Use(async (ctx, next) =>
 {
     try { await next(); }
     catch (Exception ex)
     {
-        Console.Error.WriteLine($"❌ Error: {(ex is Npgsql.PostgresException p0 ? p0.MessageText : ex.Message)}");
+        Console.Error.WriteLine($"❌ Error en {ctx.Request.Method} {ctx.Request.Path}: {(ex is Npgsql.PostgresException p0 ? $"{p0.SqlState} {p0.MessageText}" : ex.Message)}");
         if (ctx.Response.HasStarted) return;
-        var status = ex is AppError ae ? ae.StatusCode : (ex is BadHttpRequestException bh ? bh.StatusCode : 500);
-        var msg = ex is Npgsql.PostgresException pg ? pg.MessageText : ex.Message;
+        var (status, msg) = ex switch
+        {
+            AppError ae => (ae.StatusCode, ae.Message),
+            BadHttpRequestException bh => (bh.StatusCode, "Solicitud inválida"),
+            // Identificadores o fechas con formato inválido, valores fuera de rango, datos que violan una restricción
+            Npgsql.PostgresException { SqlState: "22P02" or "22007" or "22008" or "22003" or "22001" or "23502" or "23514" } => (400, "Datos inválidos"),
+            Npgsql.PostgresException { SqlState: "23503" } => (409, "El registro está relacionado con otros datos"),
+            Npgsql.PostgresException { SqlState: "23505" } => (409, "Ya existe un registro con esos datos"),
+            _ => (500, "Error interno del servidor"),
+        };
         var body = new Dictionary<string, object?> { ["success"] = false, ["message"] = string.IsNullOrEmpty(msg) ? "Error interno del servidor" : msg };
         if (Env.IsDev) body["stack"] = ex.StackTrace;
         ctx.Response.Clear();
@@ -109,6 +135,12 @@ app.Use(async (ctx, next) =>
     ctx.Response.OnStarting(() =>
     {
         var h = ctx.Response.Headers;
+        // CSP en modo solo-reporte: se observa en la consola del navegador antes de hacerla obligatoria.
+        h["Content-Security-Policy-Report-Only"] =
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+            "font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; " +
+            "frame-src 'self' blob:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; " +
+            "form-action 'self'; frame-ancestors 'self'";
         h["Cross-Origin-Opener-Policy"] = "same-origin";
         h["Cross-Origin-Resource-Policy"] = "cross-origin";
         h["Origin-Agent-Cluster"] = "?1";
@@ -217,3 +249,6 @@ static async Task NotFoundHtml(HttpContext ctx)
     var path = System.Net.WebUtility.HtmlEncode(ctx.Request.Path.Value ?? "/");
     await ctx.Response.WriteAsync($"<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Error</title>\n</head>\n<body>\n<pre>Cannot {ctx.Request.Method} {path}</pre>\n</body>\n</html>\n");
 }
+
+// Permite que las pruebas de integración (WebApplicationFactory) arranquen la API real.
+public partial class Program { }

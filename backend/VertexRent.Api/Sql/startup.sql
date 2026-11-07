@@ -279,3 +279,15 @@ CREATE INDEX IF NOT EXISTS idx_contratos_admin_inquilino ON contratos(admin_id, 
 
 -- La renta con letra ahora se calcula sola cuando no se captura.
 ALTER TABLE inquilinos ALTER COLUMN renta_letra DROP NOT NULL;
+
+-- Invalida sesiones al cambiar la contraseña (el JWT lleva "tv" y se compara en cada petición).
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0;
+
+-- Evita duplicar recordatorios del mismo día (el scheduler consulta esta clave).
+ALTER TABLE notificaciones ADD COLUMN IF NOT EXISTS dedupe_key TEXT;
+CREATE INDEX IF NOT EXISTS idx_notificaciones_dedupe ON notificaciones(usuario_id, dedupe_key) WHERE dedupe_key IS NOT NULL;
+
+-- El número de departamento era único en TODO el sistema: un segundo propietario no podía crear su "Depto 1".
+-- Pasa a ser único por propietario (admin_id, numero).
+ALTER TABLE departamentos DROP CONSTRAINT IF EXISTS departamentos_numero_key;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_departamentos_admin_numero ON departamentos(admin_id, numero);

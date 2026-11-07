@@ -75,7 +75,7 @@ export const api = {
     request<LoginResult>('POST', '/auth/register', d),
   me: () => request<User>('GET', '/auth/me'),
   changePassword: (passwordActual: string, passwordNueva: string) =>
-    request<void>('POST', '/auth/change-password', { passwordActual, passwordNueva }),
+    request<{ token: string }>('POST', '/auth/change-password', { passwordActual, passwordNueva }),
 
   // ── Inquilinos ──────────────────────────────────────────────────────────
   getMiDepto: () => request<Inquilino | null>('GET', '/inquilinos/mi-depto'),
@@ -217,6 +217,8 @@ export const api = {
   borrarNotificacion: (id: string) => request<void>('DELETE', `/notificaciones/${id}`),
   borrarLeidas: () => request<void>('DELETE', '/notificaciones/leidas'),
   marcarLeida: (id: string) => request<Notificacion>('PUT', `/notificaciones/${id}/leida`),
+  /** Boleto de 60 s para abrir el stream SSE sin poner la sesión en la URL. */
+  sseTicket: () => request<{ ticket: string }>('POST', '/events/ticket', {}),
   subscribeWebPush: (s: { endpoint: string; keys: { p256dh: string; auth: string } }) => request<void>('POST', '/push/web-subscribe', s),
   getBackups: () => request<BackupInfo[]>('GET', '/backups'),
   crearBackup: () => request<{ archivo: string; tamano_bytes: number }>('POST', '/backups/manual', {}),

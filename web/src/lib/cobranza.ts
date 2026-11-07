@@ -43,3 +43,13 @@ export const toSaldo = (s: { deuda_total: Numeric; deuda_vencida: Numeric; perio
   total: num(s.deuda_total), vencida: num(s.deuda_vencida), periodoVencido: s.periodo_vencido,
   cuotasExtra: num(s.deuda_cuotas_extra), deposito: num(s.deuda_deposito),
 })
+
+/**
+ * Lo que aún falta de la renta del mes en curso: monto del pago menos lo abonado.
+ * Sin pago registrado falta la renta completa. Un pago confirmado ya no debe nada.
+ */
+export function restanteMes(e: EstadoActual | undefined, renta: number): number {
+  if (e?.confirmado) return 0
+  const monto = e?.monto != null ? num(e.monto) : renta
+  return Math.max(monto - num(e?.total_abonado), 0)
+}

@@ -125,7 +125,7 @@ export default function PagoDetalle() {
                 <p className="text-lg font-extrabold">{pago?.confirmado ? 'Pago confirmado' : enRevision ? 'Comprobante en revisión' : pago?.rechazado ? 'Comprobante rechazado' : pago ? 'Pago pendiente' : 'Sin registro de pago'}</p>
                 {pago?.confirmado && pago.confirmado_en && <p className="text-xs text-fg-2">{fechaHora(pago.confirmado_en)}</p>}
               </div>
-              <p className="text-2xl font-extrabold">{money(pago ? monto : num(inq.renta))}</p>
+              <p className="text-2xl font-extrabold">{money(pago && !pago.confirmado && totalAbonado > 0 ? saldoPend : pago ? monto : num(inq.renta))}</p>
             </div>
 
             {parcial && (

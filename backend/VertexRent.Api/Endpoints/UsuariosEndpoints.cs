@@ -37,6 +37,8 @@ public static class UsuariosEndpoints
     static async Task<IResult> CreateUsuario(HttpContext c)
     {
         var b = await Api.Body(c);
+        var v = new Validator(b).Email("email");
+        if (v.Result is { } bad) return bad;
         var email = b.S("email"); var password = b.S("password"); var nombre = b.S("nombre_completo");
         var rol = b.S("rol"); var rolLabel = b.S("rol_label");
 
@@ -83,13 +85,21 @@ public static class UsuariosEndpoints
         var id = Api.Route(c, "id");
         var b = await Api.Body(c);
         var rol = b.S("rol");
-        if (rol is not ("admin" or "cobrador" or "inquilino"))
-            throw new AppError("Rol inválido. Usa \"admin\", \"cobrador\" o \"inquilino\"", 400);
-        if (id == c.Me().Id) throw new AppError("No puedes cambiar tu propio rol", 400);
+        if (rol is not ("cobrador" or "inquilino"))
+            throw new AppError("Rol inválido. Usa \"cobrador\" o \"inquilino\"", 400);
+        var adminId = c.Me().Id;
+        if (id == adminId) throw new AppError("No puedes cambiar tu propio rol", 400);
+
+        var scope = await Db.Query(
+            @"SELECT rol FROM usuarios WHERE id = $2 AND (admin_id = $1
+                OR id IN (SELECT usado_por FROM codigos_invitacion WHERE admin_id = $1 AND usado_por IS NOT NULL))",
+            adminId, id);
+        if (scope.First == null) throw new AppError("No tienes permiso para modificar este usuario", 403);
+        if (scope.First.S("rol") == "admin") throw new AppError("No se puede cambiar el rol de un administrador", 400);
 
         var r = await Db.Query(
-            @"UPDATE usuarios SET rol = $1 WHERE id = $2
-              RETURNING id, email, nombre_completo, rol, activo", rol, id);
+            @"UPDATE usuarios SET rol = $1, admin_id = COALESCE(admin_id, $3) WHERE id = $2
+              RETURNING id, email, nombre_completo, rol, activo", rol, id, adminId);
         if (r.First == null) throw new AppError("Usuario no encontrado", 404);
         return Api.Data(r.First);
     }
@@ -97,7 +107,7 @@ public static class UsuariosEndpoints
     static async Task<IResult> UpdatePerfil(HttpContext c)
     {
         var b = await Api.Body(c);
-        var nombre = b.S("nombre_completo"); var avatar = b.S("avatar_url");
+        var nombre = b.S("nombre_completo"); var avatar = Inputs.Imagen(b["avatar_url"], "avatar_url");
         var r = await Db.Query(
             @"UPDATE usuarios SET
                 nombre_completo = COALESCE($1, nombre_completo),

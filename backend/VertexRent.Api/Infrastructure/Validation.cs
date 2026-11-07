@@ -71,3 +71,33 @@ public sealed class Validator
         ["success"] = false, ["message"] = "Datos inválidos", ["errors"] = _errs,
     }, 400);
 }
+
+/// <summary>Validaciones de entrada compartidas por varios endpoints.</summary>
+public static class Inputs
+{
+    const int MaxImagenChars = 4 * 1024 * 1024; // ~3 MB de imagen en base64
+    static readonly Regex ImagenRx = new(@"^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$", RegexOptions.Compiled);
+
+    /// <summary>Acepta solo una imagen como data URL (jpeg/png/webp) de tamaño razonable; vacío → null.</summary>
+    public static string? Imagen(JsonNode? n, string campo)
+    {
+        var s = Js.Str(n);
+        if (string.IsNullOrWhiteSpace(s)) return null;
+        if (s.Length > MaxImagenChars) throw new AppError($"{campo}: la imagen es demasiado grande", 400);
+        if (!ImagenRx.IsMatch(s)) throw new AppError($"{campo}: debe ser una imagen JPG, PNG o WebP", 400);
+        return s;
+    }
+
+    static readonly Regex PeriodoRx = new(@"^\d{4}-(0[1-9]|1[0-2])$", RegexOptions.Compiled);
+    public static bool EsPeriodo(string? s) => s != null && PeriodoRx.IsMatch(s);
+
+    /// <summary>Fecha ISO yyyy-MM-dd (o con hora) válida; vacío → null.</summary>
+    public static string? Fecha(JsonNode? n, string campo)
+    {
+        var s = Js.Str(n)?.Trim();
+        if (string.IsNullOrEmpty(s)) return null;
+        if (!DateTime.TryParse(s, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _))
+            throw new AppError($"{campo}: fecha inválida", 400);
+        return s;
+    }
+}

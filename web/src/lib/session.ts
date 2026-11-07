@@ -36,6 +36,13 @@ function clearStorage() {
   for (const s of [localStorage, sessionStorage]) { s.removeItem(TOKEN_KEY); s.removeItem(USER_KEY) }
 }
 
+/** Sustituye solo el token (p. ej. tras cambiar la contraseña) conservando dónde estaba guardada la sesión. */
+export function replaceToken(t: string) {
+  const store = localStorage.getItem(TOKEN_KEY) ? localStorage : sessionStorage
+  token = t
+  store.setItem(TOKEN_KEY, t)
+}
+
 export function clearSession() { token = null; clearStorage() }
 export const getToken = () => token
 export const setUnauthorizedHandler = (fn: (() => void) | null) => { onUnauthorized = fn }

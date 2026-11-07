@@ -14,6 +14,13 @@ public static class ConfigEndpoints
         "usa_qr_inquilinos", "recordatorios_renta_dias",
     };
 
+    // Lo único que ve un inquilino: datos para pagar y contactar (nunca códigos de invitación ni RFC).
+    static readonly HashSet<string> VisiblesInquilino = new()
+    {
+        "arrendador_nombre", "arrendador_direccion", "arrendador_telefono",
+        "banco_nombre", "banco_clabe", "banco_titular", "app_url", "dias_gracia_retraso", "usa_qr_inquilinos",
+    };
+
     public static void Map(WebApplication app)
     {
         var g = app.MapGroup("/api/config").Auth();
@@ -44,7 +51,8 @@ public static class ConfigEndpoints
         var r = await Db.Query("SELECT clave, valor FROM configuracion WHERE admin_id = $1 ORDER BY clave", adminId);
         var config = new Dictionary<string, object?>();
         foreach (var row in r.Rows)
-            config[row.S("clave")!] = row.S("valor");
+            if (u.Rol != "inquilino" || VisiblesInquilino.Contains(row.S("clave")!))
+                config[row.S("clave")!] = row.S("valor");
 
         // Cuenta bancaria que aplica para el depto (asignada o, si no, la predeterminada).
         if (deptoNumero != null)

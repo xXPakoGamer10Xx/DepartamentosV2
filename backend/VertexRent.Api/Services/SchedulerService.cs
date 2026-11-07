@@ -7,6 +7,7 @@ namespace VertexRent.Api;
 /// <summary>Recordatorios diarios (9:00 AM CDMX): renta, vencimiento de contrato, depósitos diferidos y promesas de pago.</summary>
 public sealed class SchedulerService : BackgroundService
 {
+    static readonly TimeSpan MaxEspera = TimeSpan.FromHours(6);
     static readonly int[] DefaultRecordatoriosRenta = { 1, 0 };
 
     protected override async Task ExecuteAsync(CancellationToken ct)
@@ -19,8 +20,11 @@ public sealed class SchedulerService : BackgroundService
             var next = cron.GetNextOccurrence(DateTimeOffset.UtcNow, Js.Cdmx);
             if (next == null) return;
             var delay = next.Value - DateTimeOffset.UtcNow;
-            try { await Task.Delay(delay > TimeSpan.Zero ? delay : TimeSpan.Zero, ct); }
+            // Task.Delay no admite más de ~49 días: se espera por tramos y se vuelve a calcular.
+            var tramo = delay > MaxEspera ? MaxEspera : (delay > TimeSpan.Zero ? delay : TimeSpan.Zero);
+            try { await Task.Delay(tramo, ct); }
             catch (OperationCanceledException) { return; }
+            if (DateTimeOffset.UtcNow < next.Value) continue;
 
             Console.WriteLine("[Scheduler] Ejecutando recordatorios de pago y contratos...");
             await Task.WhenAll(CheckRentaReminders(), CheckContratoExpiration(), CheckDepositoReminders(), CheckPromesaPagoReminders());
@@ -65,9 +69,9 @@ public sealed class SchedulerService : BackgroundService
     {
         var r = await Db.Query(
             @"SELECT 1 FROM notificaciones
-              WHERE usuario_id = $1 AND tipo = $2 AND mensaje LIKE $3
+              WHERE usuario_id = $1 AND tipo = $2 AND dedupe_key = $3
                 AND DATE(created_at) = CURRENT_DATE
-              LIMIT 1", usuarioId, tipo, $"%{subKey}%");
+              LIMIT 1", usuarioId, tipo, subKey);
         return r.RowCount > 0;
     }
 
@@ -102,7 +106,7 @@ public sealed class SchedulerService : BackgroundService
                     var msg = restantes == 0 ? $"Hoy es tu día de pago — Recuerda pagar tu renta del depto {depto}"
                         : restantes == 1 ? $"Tu pago de renta vence mañana — Depto {depto}"
                         : $"Tu pago de renta vence en {restantes} días — Depto {depto}";
-                    await PushService.CreateAndSendNotification(usuarioId, titulo, msg, "renta");
+                    await PushService.CreateAndSendNotification(usuarioId, titulo, msg, "renta", subKey);
                 }
 
                 if (!string.IsNullOrEmpty(adminId) && !await YaNotificadoHoy(adminId, "renta", $"admin_{subKey}_{inq.S("id")}"))
@@ -111,7 +115,7 @@ public sealed class SchedulerService : BackgroundService
                     var adminMsg = restantes == 0 ? $"Hoy vence el pago de {nombre} (Depto {depto})"
                         : restantes == 1 ? $"Mañana vence el pago de {nombre} (Depto {depto})"
                         : $"En {restantes} días vence el pago de {nombre} (Depto {depto})";
-                    await PushService.NotificarEquipoPagos(adminId, "💰 Vencimiento de renta próximo", adminMsg, "renta");
+                    await PushService.NotificarEquipoPagos(adminId, "💰 Vencimiento de renta próximo", adminMsg, "renta", $"admin_{subKey}_{inq.S("id")}");
                 }
             }
         }
@@ -144,7 +148,7 @@ public sealed class SchedulerService : BackgroundService
                 if (!string.IsNullOrEmpty(usuarioId) && !await YaNotificadoHoy(usuarioId, "renta", subKey))
                 {
                     var msg = restantes == 1 ? $"Tu contrato vence mañana — Depto {depto}" : $"Tu contrato vence en {restantes} días — Depto {depto}";
-                    await PushService.CreateAndSendNotification(usuarioId, "📋 Tu contrato está por vencer", msg, "renta");
+                    await PushService.CreateAndSendNotification(usuarioId, "📋 Tu contrato está por vencer", msg, "renta", subKey);
                 }
 
                 var adminId = inq.S("admin_id");
@@ -152,7 +156,7 @@ public sealed class SchedulerService : BackgroundService
                 {
                     var adminMsg = restantes == 1 ? $"El contrato de {nombre} (Depto {depto}) vence mañana"
                         : $"El contrato de {nombre} (Depto {depto}) vence en {restantes} días";
-                    await PushService.NotificarEquipoPagos(adminId, "📋 Contrato por vencer", adminMsg, "renta");
+                    await PushService.NotificarEquipoPagos(adminId, "📋 Contrato por vencer", adminMsg, "renta", $"admin_{subKey}");
                 }
             }
         }
@@ -192,7 +196,7 @@ public sealed class SchedulerService : BackgroundService
                         var msg = restantes == 0 ? $"Hoy vence el pago de tu depósito diferido — Depto {depto}"
                             : restantes == 1 ? $"Tu pago de depósito diferido vence mañana — Depto {depto}"
                             : $"Tu pago de depósito diferido vence en {restantes} días — Depto {depto}";
-                        await PushService.CreateAndSendNotification(usuarioId, titulo, msg, "renta");
+                        await PushService.CreateAndSendNotification(usuarioId, titulo, msg, "renta", subKey);
                     }
 
                     var adminId = inq.S("admin_id");
@@ -201,7 +205,7 @@ public sealed class SchedulerService : BackgroundService
                         var adminMsg = restantes == 0 ? $"Hoy vence el depósito diferido de {nombre} (Depto {depto})"
                             : restantes == 1 ? $"Mañana vence el depósito diferido de {nombre} (Depto {depto})"
                             : $"En {restantes} días vence el depósito diferido de {nombre} (Depto {depto})";
-                        await PushService.NotificarEquipoPagos(adminId, "💰 Vencimiento de depósito próximo", adminMsg, "renta");
+                        await PushService.NotificarEquipoPagos(adminId, "💰 Vencimiento de depósito próximo", adminMsg, "renta", $"admin_{subKey}");
                     }
                 }
             }
@@ -238,7 +242,7 @@ public sealed class SchedulerService : BackgroundService
                 var msg = restantes == 0
                     ? $"Hoy es la fecha en que {nombre} (Depto {depto}) dijo que pagaría {periodo}"
                     : $"Mañana es la fecha en que {nombre} (Depto {depto}) dijo que pagaría {periodo}";
-                await PushService.NotificarEquipoPagos(adminId, titulo, msg, "promesa");
+                await PushService.NotificarEquipoPagos(adminId, titulo, msg, "promesa", subKey);
             }
         }
         catch (Exception ex) { Console.Error.WriteLine($"[Scheduler] Error en checkPromesaPagoReminders: {ex}"); }

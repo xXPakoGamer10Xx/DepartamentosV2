@@ -9,34 +9,34 @@ public static class PagosEndpoints
     {
         var g = app.MapGroup("/api/pagos");
 
-        // Rutas públicas (softAuth registra quién escaneó si hay sesión). tokenLimiter evita enumerar tokens.
-        g.MapGet("/info/{token}", H(GetPagoByToken)).Limit(RateLimits.Token, "token");
-        g.MapPost("/confirmar/{token}", H(ConfirmarPago)).Limit(RateLimits.Token, "token").SoftAuth();
-
         var a = g.MapGroup("").Auth();
+
+        // Confirmación por QR: solo personal con permiso de cobro del propietario del pago (nunca anónimo).
+        a.MapGet("/info/{token}", H(GetPagoByToken)).Limit(RateLimits.Token, "token").Permiso("pagos.marcar");
+        a.MapPost("/confirmar/{token}", H(ConfirmarPago)).Limit(RateLimits.Token, "token").Permiso("pagos.marcar");
 
         a.MapPost("/generar-qr/{inquilino_id}", H(GenerarQr));
         a.MapGet("/estados-actuales", H(EstadosActuales)).Permiso("pagos");
-        a.MapGet("/estado/{inquilino_id}", H(EstadoPago));
+        a.MapGet("/estado/{inquilino_id}", H(EstadoPago)).InquilinoOrPermiso("pagos");
         a.MapPost("/comprobante/{inquilino_id}", H(SubirComprobante));
         a.MapPost("/confirmar-admin/{pago_id}", H(ConfirmarPagoAdmin)).Permiso("pagos.marcar");
         a.MapPost("/marcar-pagado/{inquilino_id}", H(MarcarPagadoAdmin)).Permiso("pagos.marcar");
         a.MapDelete("/{pago_id}/cancelar", H(CancelarPago)).Permiso("pagos.marcar");
         a.MapPost("/rechazar-admin/{pago_id}", H(RechazarPagoAdmin)).Permiso("pagos.marcar");
         a.MapGet("/comprobantes-pendientes", H(ComprobantesPendientes)).Permiso("pagos");
-        a.MapGet("/historial/{inquilino_id}", H(HistorialPagos));
+        a.MapGet("/historial/{inquilino_id}", H(HistorialPagos)).InquilinoOrPermiso("pagos");
 
         // Abonos y saldo/deuda acumulada
         a.MapPost("/abono", H(RegistrarAbono)).Permiso("pagos.marcar");
-        a.MapGet("/abonos/{pago_id}", H(AbonosPago));
+        a.MapGet("/abonos/{pago_id}", H(AbonosPago)).InquilinoOrPermiso("pagos");
         a.MapPut("/abono/{abono_id}", H(EditarAbono)).Permiso("pagos.marcar");
         a.MapDelete("/abono/{abono_id}", H(EliminarAbono)).Permiso("pagos.marcar");
-        a.MapGet("/saldos/resumen", H(ResumenDeuda)).CobradorOrAdmin();
-        a.MapGet("/saldos", H(SaldosInquilinos)).CobradorOrAdmin();
-        a.MapGet("/saldo/{inquilino_id}", H(SaldoInquilino));
+        a.MapGet("/saldos/resumen", H(ResumenDeuda)).Permiso("pagos");
+        a.MapGet("/saldos", H(SaldosInquilinos)).Permiso("pagos");
+        a.MapGet("/saldo/{inquilino_id}", H(SaldoInquilino)).InquilinoOrPermiso("pagos");
         a.MapPut("/promesa/inquilino/{inquilino_id}", H(SetPromesaInquilino)).Permiso("pagos.marcar");
         a.MapPut("/{pago_id}/promesa", H(SetPromesa)).Permiso("pagos.marcar");
-        a.MapGet("/promesas/{inquilino_id}", H(PromesasHistorial));
+        a.MapGet("/promesas/{inquilino_id}", H(PromesasHistorial)).InquilinoOrPermiso("pagos");
         a.MapDelete("/promesas/{id}", H(EliminarPromesa)).Permiso("pagos.marcar");
     }
 
@@ -44,17 +44,26 @@ public static class PagosEndpoints
     static async Task<decimal> TotalAbonado(string pagoId) =>
         (await Db.Query("SELECT COALESCE(SUM(monto), 0) AS total FROM abonos_pago WHERE pago_id = $1", pagoId)).First!.D("total");
 
+    /// <summary>
+    /// Inserta el pago del periodo si no existe y devuelve el vigente. Seguro ante peticiones simultáneas
+    /// (UNIQUE inquilino_id+periodo): un doble clic ya no produce error 500.
+    /// </summary>
+    static async Task<Row> CrearPagoSiNoExiste(string inquilinoId, string periodo, decimal monto, string? metodo, string? qrToken = null)
+    {
+        var ins = await Db.Query(
+            @"INSERT INTO pagos (inquilino_id, periodo, monto, metodo, qr_token) VALUES ($1, $2, $3, $4, $5)
+              ON CONFLICT (inquilino_id, periodo) DO NOTHING RETURNING *",
+            inquilinoId, periodo, monto, metodo, qrToken);
+        if (ins.First != null) return ins.First;
+        return (await Db.Query("SELECT * FROM pagos WHERE inquilino_id = $1 AND periodo = $2", inquilinoId, periodo)).First!;
+    }
+
     /// <summary>Obtiene (o crea) el pago de un periodo con monto = solo renta (las cuotas extra se cobran aparte).</summary>
     public static async Task<Row> GetOrCrearPago(Row inquilino, string periodo)
     {
         var existing = await Db.Query("SELECT * FROM pagos WHERE inquilino_id = $1 AND periodo = $2", inquilino.S("id"), periodo);
         if (existing.First != null) return existing.First;
-
-        var montoTotal = inquilino.D("renta");
-        var ins = await Db.Query(
-            "INSERT INTO pagos (inquilino_id, periodo, monto, metodo) VALUES ($1, $2, $3, $4) RETURNING *",
-            inquilino.S("id"), periodo, montoTotal, Js.T(JsonValue.Create(inquilino.S("metodo_pago"))) ? inquilino.S("metodo_pago") : "efectivo");
-        return ins.First!;
+        return await CrearPagoSiNoExiste(inquilino.S("id")!, periodo, inquilino.D("renta"), Metodo(inquilino));
     }
 
     static string Metodo(Row inq) => string.IsNullOrEmpty(inq.S("metodo_pago")) ? "efectivo" : inq.S("metodo_pago")!;
@@ -89,9 +98,10 @@ public static class PagosEndpoints
         Row pago;
         if (pagoRes.First == null)
         {
-            pago = (await Db.Query(
-                "INSERT INTO pagos (inquilino_id, periodo, monto, metodo, qr_token) VALUES ($1, $2, $3, $4, $5) RETURNING *",
-                inquilinoId, periodo, montoTotal, Metodo(inquilino), Guid.NewGuid().ToString())).First!;
+            pago = await CrearPagoSiNoExiste(inquilinoId, periodo, montoTotal, Metodo(inquilino), Guid.NewGuid().ToString());
+            if (string.IsNullOrEmpty(pago.S("qr_token")))
+                pago = (await Db.Query("UPDATE pagos SET qr_token = $1 WHERE id = $2 AND qr_token IS NULL RETURNING *",
+                    Guid.NewGuid().ToString(), pago.S("id"))).First ?? pago;
         }
         else if (string.IsNullOrEmpty(pagoRes.First.S("qr_token")))
         {
@@ -120,10 +130,11 @@ public static class PagosEndpoints
     // ── GET /info/:token ─────────────────────────────────────────────────────
     static async Task<IResult> GetPagoByToken(HttpContext c)
     {
+        // Solo los campos que muestra la pantalla de cobro (sin comprobante ni datos internos).
         var r = await Db.Query(
-            @"SELECT p.*, i.nombre_completo, i.depto_numero, i.renta
+            @"SELECT p.id, p.periodo, p.monto, p.confirmado, i.nombre_completo, i.depto_numero, i.renta
               FROM pagos p JOIN inquilinos i ON i.id = p.inquilino_id
-              WHERE p.qr_token = $1", Api.Route(c, "token"));
+              WHERE p.qr_token = $1 AND i.admin_id = $2", Api.Route(c, "token"), c.Me().Id);
         if (r.First == null) throw new AppError("QR inválido o expirado", 404);
         return Api.Data(r.First);
     }
@@ -132,27 +143,20 @@ public static class PagosEndpoints
     static async Task<IResult> ConfirmarPago(HttpContext c)
     {
         var token = Api.Route(c, "token");
+        var u = c.Me();
         var pagoRes = await Db.Query(
             @"SELECT p.*, i.nombre_completo, i.depto_numero, i.admin_id
               FROM pagos p JOIN inquilinos i ON i.id = p.inquilino_id
-              WHERE p.qr_token = $1", token);
+              WHERE p.qr_token = $1 AND i.admin_id = $2", token, u.Id);
         var pago = pagoRes.First ?? throw new AppError("QR inválido o expirado", 404);
 
         if (pago.B("confirmado"))
-            return Api.Obj(200, ("data", pago), ("yaConfirmado", true));
+            return Api.Obj(200, ("data", pago.Without("comprobante_url")), ("yaConfirmado", true));
 
-        var body = await Api.Body(c);
-        var meId = c.MaybeMe()?.Id;
-        var scannerId = !string.IsNullOrEmpty(meId) ? meId : (Js.T(body["scanner_id"]) ? body.S("scanner_id") : null);
-
+        var scannerId = u.Actor;
         await Db.Query("UPDATE pagos SET escaneado_por = $2, escaneado_en = NOW() WHERE id = $1", pago.S("id"), scannerId);
 
-        var saldoPendiente = Math.Max(pago.D("monto") - await TotalAbonado(pago.S("id")!), 0);
-        if (saldoPendiente > 0)
-            await Db.Query(
-                "INSERT INTO abonos_pago (pago_id, monto, metodo, nota, registrado_por) VALUES ($1, $2, $3, $4, $5)",
-                pago.S("id"), saldoPendiente, pago.S("metodo"), "Confirmado por escaneo de QR", scannerId);
-        var actualizado = (await SaldoService.RecalcularPago(pago.S("id")!)).Pago;
+        var actualizado = (await SaldoService.AbonarSaldoPendiente(pago.S("id")!, pago.S("metodo"), "Confirmado por escaneo de QR", scannerId)).Pago;
 
         var pagoData = actualizado.With(("nombre_completo", pago.S("nombre_completo")), ("depto_numero", pago.I("depto_numero")));
 
@@ -206,8 +210,7 @@ public static class PagosEndpoints
     {
         var inquilinoId = Api.Route(c, "inquilino_id");
         var b = await Api.Body(c);
-        var url = b["comprobante_url"];
-        if (!Js.T(url)) throw new AppError("comprobante_url es requerido", 400);
+        var url = Inputs.Imagen(b["comprobante_url"], "comprobante_url") ?? throw new AppError("comprobante_url es requerido", 400);
 
         var u = c.Me();
         var authCheck = u.Rol == "inquilino" ? "AND usuario_id = $2" : "AND admin_id = $2";
@@ -220,10 +223,7 @@ public static class PagosEndpoints
         if (pagoRes.First == null)
         {
             var inq = (await Db.Query("SELECT renta, metodo_pago FROM inquilinos WHERE id = $1", inquilinoId)).First!;
-            var montoTotal = inq.D("renta");
-            pago = (await Db.Query(
-                "INSERT INTO pagos (inquilino_id, periodo, monto, metodo) VALUES ($1, $2, $3, $4) RETURNING *",
-                inquilinoId, periodo, montoTotal, "transferencia")).First!;
+            pago = await CrearPagoSiNoExiste(inquilinoId, periodo, inq.D("renta"), "transferencia");
         }
         else pago = pagoRes.First;
 
@@ -259,12 +259,7 @@ public static class PagosEndpoints
 
         await Db.Query("UPDATE pagos SET escaneado_por = $2, escaneado_en = NOW() WHERE id = $1", pagoId, u.Actor);
 
-        var saldoPendiente = Math.Max(pago.D("monto") - await TotalAbonado(pagoId), 0);
-        if (saldoPendiente > 0)
-            await Db.Query(
-                "INSERT INTO abonos_pago (pago_id, monto, metodo, nota, registrado_por) VALUES ($1, $2, $3, $4, $5)",
-                pagoId, saldoPendiente, pago.S("metodo"), "Confirmado por admin (comprobante)", u.Actor);
-        var actualizado = (await SaldoService.RecalcularPago(pagoId)).Pago;
+        var actualizado = (await SaldoService.AbonarSaldoPendiente(pagoId, pago.S("metodo"), "Confirmado por admin (comprobante)", u.Actor)).Pago;
 
         var pagoData = actualizado.With(("nombre_completo", pago.S("nombre_completo")), ("depto_numero", pago.I("depto_numero")));
 
@@ -281,8 +276,8 @@ public static class PagosEndpoints
     static async Task<IResult> ComprobantesPendientes(HttpContext c)
     {
         var u = c.Me();
-        // Admin ve solo los suyos; cobrador ve todos (sin restricción de admin_id), igual que antes.
-        var isAdmin = u.Rol == "admin";
+        // u.Id es el propietario de los datos tanto para admin como para colaborador.
+        var isAdmin = true;
         var r = await Db.Query(
             $@"SELECT p.id, p.monto, p.periodo, p.comprobante_url, p.comprobante_subido_en,
                       i.nombre_completo, i.depto_numero, i.id AS inquilino_id
@@ -303,9 +298,7 @@ public static class PagosEndpoints
         var inquilinoId = Api.Route(c, "inquilino_id");
         var u = c.Me();
         var authCheck = u.Rol == "inquilino" ? "AND usuario_id = $2" : "AND admin_id = $2";
-        var own = u.Rol == "cobrador"
-            ? await Db.Query("SELECT id FROM inquilinos WHERE id = $1", inquilinoId)
-            : await Db.Query($"SELECT id FROM inquilinos WHERE id = $1 {authCheck}", inquilinoId, u.Id);
+        var own = await Db.Query($"SELECT id FROM inquilinos WHERE id = $1 {authCheck}", inquilinoId, u.Id);
         if (own.First == null) throw new AppError("No autorizado", 403);
 
         var r = await Db.Query(
@@ -358,9 +351,7 @@ public static class PagosEndpoints
         Row pago;
         if (pagoRes.First == null)
         {
-            var montoTotal = inquilino.D("renta");
-            pago = (await Db.Query("INSERT INTO pagos (inquilino_id, periodo, monto, metodo) VALUES ($1, $2, $3, $4) RETURNING *",
-                inquilinoId, periodo, montoTotal, Metodo(inquilino))).First!;
+            pago = await CrearPagoSiNoExiste(inquilinoId, periodo, inquilino.D("renta"), Metodo(inquilino));
         }
         else if (pagoRes.First.B("confirmado"))
             return Api.Obj(200, ("data", pagoRes.First), ("yaConfirmado", true));
@@ -369,23 +360,12 @@ public static class PagosEndpoints
         var pagoId = pago.S("id")!;
         await Db.Query("UPDATE pagos SET escaneado_por = $2, escaneado_en = NOW() WHERE id = $1", pagoId, u.Actor);
 
-        var totalAbonado = await TotalAbonado(pagoId);
-        var saldoPendiente = Math.Max(pago.D("monto") - totalAbonado, 0);
-
         // "Solo renta": cobra la renta pero no los cargos extra pendientes del periodo.
-        var montoAAbonar = saldoPendiente;
-        var nota = "Marcado como pagado completo por admin";
-        if (soloRenta)
-        {
-            var rentaPendiente = Math.Max(inquilino.D("renta") - totalAbonado, 0);
-            montoAAbonar = Math.Min(rentaPendiente, saldoPendiente);
-            nota = "Marcado como pagado (solo renta, cargos extra pendientes) por admin";
-        }
-
-        if (montoAAbonar > 0)
-            await Db.Query("INSERT INTO abonos_pago (pago_id, monto, metodo, nota, registrado_por) VALUES ($1, $2, $3, $4, $5)",
-                pagoId, montoAAbonar, Metodo(inquilino), nota, u.Actor);
-        var actualizado = (await SaldoService.RecalcularPago(pagoId)).Pago;
+        var nota = soloRenta
+            ? "Marcado como pagado (solo renta, cargos extra pendientes) por admin"
+            : "Marcado como pagado completo por admin";
+        var actualizado = (await SaldoService.AbonarSaldoPendiente(
+            pagoId, Metodo(inquilino), nota, u.Actor, soloRenta ? inquilino.D("renta") : null)).Pago;
 
         var pagoData = actualizado.With(("nombre_completo", inquilino.S("nombre_completo")), ("depto_numero", inquilino.I("depto_numero")));
 
@@ -435,7 +415,7 @@ public static class PagosEndpoints
     {
         var u = c.Me();
         var periodo = Js.CurrentPeriodo();
-        var isAdmin = u.Rol == "admin";
+        var isAdmin = true; // u.Id ya es el propietario (también para colaboradores)
         var r = await Db.Query(
             $@"SELECT i.id AS inquilino_id,
                       p.id AS pago_id,
@@ -495,23 +475,18 @@ public static class PagosEndpoints
         if (double.IsNaN(montoAbono) || montoAbono <= 0) throw new AppError("El monto del abono debe ser mayor a 0", 400);
 
         var u = c.Me();
-        var inqRes = u.Rol == "admin"
-            ? await Db.Query("SELECT * FROM inquilinos WHERE id = $1 AND admin_id = $2 AND estado = 'activo'", b["inquilino_id"], u.Id)
-            : await Db.Query("SELECT * FROM inquilinos WHERE id = $1  AND estado = 'activo'", b["inquilino_id"]);
+        var inqRes = await Db.Query("SELECT * FROM inquilinos WHERE id = $1 AND admin_id = $2 AND estado = 'activo'", b["inquilino_id"], u.Id);
         var inquilino = inqRes.First ?? throw new AppError("Inquilino no encontrado o no autorizado", 404);
 
         var periodoFinal = Js.T(b["periodo"]) ? b.S("periodo")! : Js.CurrentPeriodo();
+        if (!Inputs.EsPeriodo(periodoFinal)) throw new AppError("El periodo debe tener el formato AAAA-MM", 400);
         var pago = await GetOrCrearPago(inquilino, periodoFinal);
         if (pago.B("confirmado")) throw new AppError("Este periodo ya está pagado por completo", 400);
 
         var metodo = Js.T(b["metodo"]) ? b.S("metodo") : Metodo(inquilino);
-        var abonoRes = await Db.Query(
-            @"INSERT INTO abonos_pago (pago_id, monto, fecha, metodo, nota, comprobante_url, registrado_por)
-              VALUES ($1, $2, COALESCE($3, CURRENT_DATE), $4, $5, $6, $7) RETURNING *",
-            pago.S("id"), montoAbono, Js.T(b["fecha"]) ? b.S("fecha") : null, metodo,
-            Js.T(b["nota"]) ? b.S("nota") : null, Js.T(b["comprobante_url"]) ? b.S("comprobante_url") : null, u.Actor);
-
-        var rec = await SaldoService.RecalcularPago(pago.S("id")!);
+        var (abono, rec) = await SaldoService.RegistrarAbono(
+            pago.S("id")!, (decimal)montoAbono, Inputs.Fecha(b["fecha"], "fecha"), metodo,
+            Js.T(b["nota"]) ? b.S("nota") : null, Inputs.Imagen(b["comprobante_url"], "comprobante_url"), u.Actor);
 
         var pagoData = rec.Pago.With(("nombre_completo", inquilino.S("nombre_completo")), ("depto_numero", inquilino.I("depto_numero")));
         var usuarioId = inquilino.S("usuario_id");
@@ -531,7 +506,7 @@ public static class PagosEndpoints
 
         return Api.Data(new Dictionary<string, object?>
         {
-            ["abono"] = abonoRes.First, ["pago"] = rec.Pago,
+            ["abono"] = abono, ["pago"] = rec.Pago,
             ["totalAbonado"] = (double)rec.TotalAbonado, ["saldoPendiente"] = (double)rec.SaldoPendiente,
         });
     }
@@ -541,10 +516,8 @@ public static class PagosEndpoints
     {
         var pagoId = Api.Route(c, "pago_id");
         var u = c.Me();
-        var authCheck = u.Rol == "inquilino" ? "AND i.usuario_id = $2" : u.Rol == "admin" ? "AND i.admin_id = $2" : "";
-        var own = u.Rol == "cobrador"
-            ? await Db.Query($"SELECT p.id FROM pagos p JOIN inquilinos i ON i.id = p.inquilino_id WHERE p.id = $1 {authCheck}", pagoId)
-            : await Db.Query($"SELECT p.id FROM pagos p JOIN inquilinos i ON i.id = p.inquilino_id WHERE p.id = $1 {authCheck}", pagoId, u.Id);
+        var authCheck = u.Rol == "inquilino" ? "AND i.usuario_id = $2" : "AND i.admin_id = $2";
+        var own = await Db.Query($"SELECT p.id FROM pagos p JOIN inquilinos i ON i.id = p.inquilino_id WHERE p.id = $1 {authCheck}", pagoId, u.Id);
         if (own.First == null) throw new AppError("No autorizado", 403);
 
         var r = await Db.Query(
@@ -573,8 +546,9 @@ public static class PagosEndpoints
         if (b.ContainsKey("monto"))
         {
             var m = Js.ParseFloat(b["monto"]);
-            if (double.IsNaN(m) || m == 0 || m <= 0) throw new AppError("El monto del abono debe ser mayor a 0", 400);
+            if (double.IsNaN(m) || m <= 0) throw new AppError("El monto del abono debe ser mayor a 0", 400);
         }
+        Inputs.Fecha(b["fecha"], "fecha");
 
         var updated = await Db.Query(
             @"UPDATE abonos_pago SET
@@ -617,10 +591,8 @@ public static class PagosEndpoints
     {
         var inquilinoId = Api.Route(c, "inquilino_id");
         var u = c.Me();
-        var authCheck = u.Rol == "inquilino" ? "AND usuario_id = $2" : u.Rol == "admin" ? "AND admin_id = $2" : "";
-        var inqRes = u.Rol == "cobrador"
-            ? await Db.Query($"SELECT id, renta, fecha_inicio::text AS fecha_inicio_txt FROM inquilinos WHERE id = $1 {authCheck}", inquilinoId)
-            : await Db.Query($"SELECT id, renta, fecha_inicio::text AS fecha_inicio_txt FROM inquilinos WHERE id = $1 {authCheck}", inquilinoId, u.Id);
+        var authCheck = u.Rol == "inquilino" ? "AND usuario_id = $2" : "AND admin_id = $2";
+        var inqRes = await Db.Query($"SELECT id, renta, fecha_inicio::text AS fecha_inicio_txt FROM inquilinos WHERE id = $1 {authCheck}", inquilinoId, u.Id);
         var inq = inqRes.First ?? throw new AppError("No autorizado", 403);
 
         var detalle = await Db.Query(
@@ -716,7 +688,7 @@ public static class PagosEndpoints
     {
         var inquilinoId = Api.Route(c, "inquilino_id");
         var u = c.Me();
-        var whereAdmin = u.Rol == "admin" ? "AND i.admin_id = $2" : "AND i.usuario_id = $2";
+        var whereAdmin = u.Rol == "inquilino" ? "AND i.usuario_id = $2" : "AND i.admin_id = $2";
         var r = await Db.Query(
             $@"SELECT pp.id, pp.fecha_promesa, pp.created_at,
                       p.periodo, p.monto, p.confirmado, p.confirmado_en
@@ -731,7 +703,8 @@ public static class PagosEndpoints
             var estado = "pendiente";
             if (row.B("confirmado") && !string.IsNullOrEmpty(row.S("confirmado_en")))
             {
-                var pagado = row.S("confirmado_en")![..10];
+                // La fecha prometida es de calendario CDMX: se compara el día CDMX del pago, no el día UTC.
+                var pagado = TimeZoneInfo.ConvertTime(row.Dt("confirmado_en")!.Value, Js.Cdmx).ToString("yyyy-MM-dd");
                 var prometida = row.S("fecha_promesa")![..10];
                 estado = string.CompareOrdinal(pagado, prometida) <= 0 ? "cumplida" : "incumplida";
             }
@@ -781,7 +754,7 @@ GREATEST(MAX(i.deposito) - COALESCE((SELECT SUM(monto) FROM abonos_deposito WHER
     static async Task<IResult> SaldosInquilinos(HttpContext c)
     {
         var u = c.Me();
-        var isAdmin = u.Rol == "admin";
+        var isAdmin = true; // u.Id ya es el propietario (también para colaboradores)
         var r = await Db.Query(
             $@"SELECT i.id AS inquilino_id, i.depto_numero, i.nombre_completo,
                       {DeudaVencida} AS deuda_vencida,
@@ -798,7 +771,7 @@ GREATEST(MAX(i.deposito) - COALESCE((SELECT SUM(monto) FROM abonos_deposito WHER
     static async Task<IResult> ResumenDeuda(HttpContext c)
     {
         var u = c.Me();
-        var isAdmin = u.Rol == "admin";
+        var isAdmin = true; // u.Id ya es el propietario (también para colaboradores)
         var r = await Db.Query(
             $@"SELECT * FROM (
                  SELECT i.id AS inquilino_id, i.depto_numero, i.nombre_completo,

@@ -36,6 +36,17 @@ public static class Guards
         return u;
     }
 
+    /// <summary>La sesión solo vale mientras el usuario siga activo y no haya cambiado su contraseña (token_version).</summary>
+    static async Task EnsureSesionVigente(string userId, JsonObject payload)
+    {
+        if (!Guid.TryParse(userId, out _)) throw new AppError("Token inválido o expirado", 401);
+        var r = await Db.Query("SELECT activo, token_version FROM usuarios WHERE id = $1", userId);
+        var row = r.First;
+        var tv = Js.ParseFloat(payload["tv"]); if (double.IsNaN(tv)) tv = 0;
+        if (row == null || !row.B("activo") || row.I("token_version") != (int)tv)
+            throw new AppError("Token inválido o expirado", 401);
+    }
+
     // ── authMiddleware ────────────────────────────────────────────────────────
     public static TB Auth<TB>(this TB b) where TB : IEndpointConventionBuilder => b.AddEndpointFilter(async (ctx, next) =>
     {
@@ -43,7 +54,10 @@ public static class Guards
         var raw = BearerToken(c);
         if (raw == null) throw new AppError("Token de autenticación requerido", 401);
         var payload = Jwt.Verify(raw) ?? throw new AppError("Token inválido o expirado", 401);
+        // Los tokens de propósito limitado (pdf_download, sse_ticket) no sirven como sesión.
+        if (payload["scope"] != null) throw new AppError("Token inválido o expirado", 401);
         var user = FromPayload(payload);
+        await EnsureSesionVigente(user.Id, payload);
         // Un colaborador opera SOBRE los datos de su admin: id se reescribe al del admin.
         if (user.Rol == "cobrador" && !string.IsNullOrEmpty(user.AdminId))
         {
@@ -57,6 +71,15 @@ public static class Guards
     public static TB AdminOnly<TB>(this TB b) where TB : IEndpointConventionBuilder => b.AddEndpointFilter(async (ctx, next) =>
     {
         if (ctx.HttpContext.Me().Rol != "admin") throw new AppError("Acceso restringido a administradores", 403);
+        return await next(ctx);
+    });
+
+    /// <summary>Dueño de la plataforma: admin cuyo correo está en PLATFORM_ADMIN_EMAILS. Sin la variable, nadie pasa.</summary>
+    public static TB PlatformAdmin<TB>(this TB b) where TB : IEndpointConventionBuilder => b.AddEndpointFilter(async (ctx, next) =>
+    {
+        var u = ctx.HttpContext.Me();
+        if (u.Rol != "admin" || !Env.IsPlatformAdmin(u.Email))
+            throw new AppError("Acceso restringido al dueño de la plataforma", 403);
         return await next(ctx);
     });
 
@@ -105,12 +128,13 @@ public static class Guards
         return await next(ctx);
     });
 
-    // ── sseAuth: JWT de sesión por header o ?token= ──────────────────────────
+    // ── sseAuth: boleto de un solo propósito y 60 s (?ticket=). El JWT de sesión nunca viaja en la URL ──
     public static TB SseAuth<TB>(this TB b) where TB : IEndpointConventionBuilder => b.AddEndpointFilter(async (ctx, next) =>
     {
         var c = ctx.HttpContext;
-        var raw = BearerOrQuery(c) ?? throw new AppError("Token de autenticación requerido", 401);
-        var p = Jwt.Verify(raw) ?? throw new AppError("Token inválido o expirado", 401);
+        var raw = c.Request.Query["ticket"].ToString();
+        var p = Jwt.Verify(string.IsNullOrEmpty(raw) ? null : raw) ?? throw new AppError("Boleto inválido o expirado", 401);
+        if (Js.Str(p["scope"]) != "sse_ticket") throw new AppError("Boleto inválido o expirado", 401);
         c.Items["__user"] = FromPayload(p);
         return await next(ctx);
     });

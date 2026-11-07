@@ -26,7 +26,7 @@ public static class AuthEndpoints
             throw new AppError("Email y contraseña son requeridos", 400);
 
         var result = await Db.Query(
-            @"SELECT id, email, password_hash, nombre_completo, rol, avatar_url, activo, admin_id, permisos
+            @"SELECT id, email, password_hash, nombre_completo, rol, avatar_url, activo, admin_id, permisos, token_version
               FROM usuarios WHERE email = $1", email.ToLowerInvariant().Trim());
 
         var user = result.First;
@@ -42,6 +42,7 @@ public static class AuthEndpoints
         {
             ["id"] = user.S("id"), ["email"] = user.S("email"),
             ["rol"] = user.S("rol"), ["nombre_completo"] = user.S("nombre_completo"),
+            ["tv"] = user.I("token_version"),
         };
         if (user.S("rol") != "admin")
         {
@@ -71,6 +72,7 @@ public static class AuthEndpoints
               FROM usuarios WHERE id = $1", u.Actor);
         var row = r.First ?? throw new AppError("Usuario no encontrado", 404);
         row["permisos"] = row.S("rol") == "admin" ? null : (row.J("permisos") is JsonArray a ? a : new JsonArray());
+        row["plataforma"] = row.S("rol") == "admin" && Env.IsPlatformAdmin(row.S("email"));
         return Api.Data(row);
     }
 
@@ -93,6 +95,8 @@ public static class AuthEndpoints
         if (password.Length < 8) throw new AppError("La contraseña debe tener al menos 8 caracteres", 400);
 
         var userRol = rol == "admin" ? "admin" : "inquilino";
+        // No se puede registrar un alias del correo del dueño de la plataforma (mismo mensaje que un duplicado).
+        if (Env.IsPlatformAlias(email)) throw new AppError("Ya existe una cuenta con ese correo electrónico", 409);
 
         // Registro abierto (servicio): cualquiera puede crear su propia cuenta de administrador.
         // Si ADMIN_SIGNUP_CODE está definido, se vuelve a exigir (modo instalación privada).
@@ -157,21 +161,36 @@ public static class AuthEndpoints
 
         var hash = BCrypt.Net.BCrypt.HashPassword(password, 12);
         var permisosFinal = userRol == "cobrador" ? Permisos.Sanitize(codigoPermisos) : new List<string>();
-        var ins = await Db.Query(
-            @"INSERT INTO usuarios (email, password_hash, nombre_completo, rol, admin_id, permisos, rol_label)
-              VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
-              RETURNING id, email, nombre_completo, rol, avatar_url",
-            email.ToLowerInvariant().Trim(), hash, Js.TitleCase(nombre), userRol,
-            userRol == "admin" ? null : codigoAdminId, JsonX.Arr(permisosFinal).ToJsonString(),
-            userRol == "cobrador" ? codigoRolLabel : null);
-        var user = ins.First!;
+        // Todo en una transacción: el código se consume de forma atómica (no se puede usar dos veces en paralelo)
+        // y, si algo falla, no queda ni el usuario a medias ni el código quemado.
+        var user = await Db.Tx(async tx =>
+        {
+            if (codigoInvitacionId != null)
+            {
+                var claim = await tx.Query(
+                    "UPDATE codigos_invitacion SET usado = true, usado_en = NOW() WHERE id = $1 AND usado = false RETURNING id", codigoInvitacionId);
+                if (claim.First == null) throw new AppError("Código de invitación inválido, expirado o ya utilizado", 403);
+            }
+            var ins = await tx.Query(
+                @"INSERT INTO usuarios (email, password_hash, nombre_completo, rol, admin_id, permisos, rol_label)
+                  VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
+                  RETURNING id, email, nombre_completo, rol, avatar_url",
+                email.ToLowerInvariant().Trim(), hash, Js.TitleCase(nombre), userRol,
+                userRol == "admin" ? null : codigoAdminId, JsonX.Arr(permisosFinal).ToJsonString(),
+                userRol == "cobrador" ? codigoRolLabel : null);
+            var nuevo = ins.First!;
 
-        if (codigoInvitacionId != null)
-            await Db.Query("UPDATE codigos_invitacion SET usado = true, usado_en = NOW(), usado_por = $1 WHERE id = $2",
-                user.S("id"), codigoInvitacionId);
-        else if (inquilinoTokenToLink != null)
-            await Db.Query("UPDATE inquilinos SET usuario_id = $1, invitation_token = NULL WHERE invitation_token = $2",
-                user.S("id"), inquilinoTokenToLink);
+            if (codigoInvitacionId != null)
+                await tx.Query("UPDATE codigos_invitacion SET usado_por = $1 WHERE id = $2", nuevo.S("id"), codigoInvitacionId);
+            else if (inquilinoTokenToLink != null)
+            {
+                var link = await tx.Query(
+                    "UPDATE inquilinos SET usuario_id = $1, invitation_token = NULL WHERE invitation_token = $2 AND usuario_id IS NULL RETURNING id",
+                    nuevo.S("id"), inquilinoTokenToLink);
+                if (link.First == null) throw new AppError("Código de invitación inválido, expirado o ya utilizado", 403);
+            }
+            return nuevo;
+        });
 
         var jwtPayload = new JsonObject
         {
@@ -203,11 +222,19 @@ public static class AuthEndpoints
         if (nueva.Length < 8) throw new AppError("La contraseña nueva debe tener al menos 8 caracteres", 400);
 
         var u = c.Me();
-        var r = await Db.Query("SELECT password_hash FROM usuarios WHERE id = $1", u.Id);
+        // u.Id es el admin dueño cuando actúa un colaborador: la contraseña es de quien realmente inició sesión.
+        var r = await Db.Query("SELECT password_hash FROM usuarios WHERE id = $1", u.Actor);
         if (r.First == null || !BCrypt.Net.BCrypt.Verify(actual, r.First.S("password_hash")))
             throw new AppError("Contraseña actual incorrecta", 400);
 
-        await Db.Query("UPDATE usuarios SET password_hash = $1 WHERE id = $2", BCrypt.Net.BCrypt.HashPassword(nueva, 12), u.Id);
-        return Api.Msg("Contraseña actualizada correctamente");
+        // Subir token_version cierra todas las demás sesiones; se devuelve un token nuevo para esta.
+        var upd = await Db.Query(
+            "UPDATE usuarios SET password_hash = $1, token_version = token_version + 1 WHERE id = $2 RETURNING token_version",
+            BCrypt.Net.BCrypt.HashPassword(nueva, 12), u.Actor);
+        var payload = new JsonObject((u.Raw ?? new JsonObject()).Select(kv => KeyValuePair.Create(kv.Key, kv.Value?.DeepClone())))
+        {
+            ["tv"] = upd.First!.I("token_version"),
+        };
+        return Api.Data(new Dictionary<string, object?> { ["token"] = Jwt.Create(payload) });
     }
 }

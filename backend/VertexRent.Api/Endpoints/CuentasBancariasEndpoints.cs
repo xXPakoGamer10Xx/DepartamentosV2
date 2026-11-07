@@ -30,7 +30,7 @@ public static class CuentasBancariasEndpoints
                    FROM departamentos d WHERE d.cuenta_bancaria_id = cb.id) AS departamentos,
                 (SELECT COALESCE(SUM(i.renta), 0)
                    FROM departamentos d
-                   JOIN inquilinos i ON i.depto_numero = d.numero AND i.estado = 'activo'
+                   JOIN inquilinos i ON i.depto_numero = d.numero AND i.admin_id = d.admin_id AND i.estado = 'activo'
                    WHERE d.cuenta_bancaria_id = cb.id) AS renta_mensual
               FROM cuentas_bancarias cb
               WHERE cb.admin_id = $1

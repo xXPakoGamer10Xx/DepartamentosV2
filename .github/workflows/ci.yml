@@ -1,0 +1,48 @@
+name: CI
+
+# Corre en runners de GitHub (nunca en el runner propio del servidor): es seguro con pull_request.
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (.NET) y pruebas de integración
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      # Las pruebas levantan un PostgreSQL 16 desechable con Docker (ya incluido en el runner).
+      - name: Pruebas
+        run: dotnet test backend/VertexRent.Api.Tests/VertexRent.Api.Tests.csproj --nologo
+
+  web:
+    name: Web (tipos, lint y build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx tsc -b
+      - run: npx oxlint
+      - run: npm run build

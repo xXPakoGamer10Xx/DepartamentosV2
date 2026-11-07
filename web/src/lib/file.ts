@@ -39,13 +39,20 @@ export function guardarBlob(blob: Blob, nombre: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-/** Abre un PDF en una pestaña nueva (desde un Blob autenticado), con `titulo` como nombre de la pestaña. */
+export interface PdfParaVer { blob: Blob; titulo: string; nombre: string }
+let visor: ((pdf: PdfParaVer) => void) | null = null
+/** Lo registra <VisorPdfHost/>: el visor propio de la app (con Imprimir, Descargar y Compartir). */
+export const registrarVisorPdf = (fn: ((pdf: PdfParaVer) => void) | null) => { visor = fn }
+
+/**
+ * Muestra un PDF (Blob autenticado) en el visor de la app. Una pestaña con un iframe no ofrece imprimir ni
+ * descargar en la PWA instalada, y en el celular los iframes de PDF ni se dibujan.
+ */
 export function abrirPdf(blob: Blob, titulo = 'Contrato') {
-  const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }))
-  const w = window.open('', '_blank')
-  if (!w) { const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.click(); return }
-  const t = titulo.replace(/[<>&"]/g, '')
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${t}</title><style>html,body,iframe{margin:0;width:100%;height:100%;border:0}</style></head><body><iframe src="${url}" title="${t}"></iframe></body></html>`)
-  w.document.close()
+  const pdf = new Blob([blob], { type: 'application/pdf' })
+  const nombre = `${titulo.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, '_').slice(0, 80) || 'documento'}.pdf`
+  if (visor) return visor({ blob: pdf, titulo, nombre })
+  const url = URL.createObjectURL(pdf) // sin visor montado: el PDF directo en una pestaña
+  window.open(url, '_blank')
   setTimeout(() => URL.revokeObjectURL(url), 10 * 60_000)
 }

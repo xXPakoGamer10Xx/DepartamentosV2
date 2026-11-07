@@ -91,6 +91,8 @@ public static class BackupService
 /// <summary>Backup automático según BACKUP_CRON (por defecto 4:00 AM, hora CDMX).</summary>
 public sealed class BackupCronService : BackgroundService
 {
+    static readonly TimeSpan MaxEspera = TimeSpan.FromHours(6);
+
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         var expr = Env.Get("BACKUP_CRON", "0 4 * * *");
@@ -104,8 +106,11 @@ public sealed class BackupCronService : BackgroundService
             var next = cron.GetNextOccurrence(DateTimeOffset.UtcNow, Js.Cdmx);
             if (next == null) return;
             var delay = next.Value - DateTimeOffset.UtcNow;
-            try { await Task.Delay(delay > TimeSpan.Zero ? delay : TimeSpan.Zero, ct); }
+            // Task.Delay no admite más de ~49 días: se espera por tramos y se vuelve a calcular.
+            var tramo = delay > MaxEspera ? MaxEspera : (delay > TimeSpan.Zero ? delay : TimeSpan.Zero);
+            try { await Task.Delay(tramo, ct); }
             catch (OperationCanceledException) { return; }
+            if (DateTimeOffset.UtcNow < next.Value) continue;
 
             Console.WriteLine($"🗄️  Iniciando backup automático ({DateTime.UtcNow:O})...");
             try { await BackupService.RunBackup(); }
