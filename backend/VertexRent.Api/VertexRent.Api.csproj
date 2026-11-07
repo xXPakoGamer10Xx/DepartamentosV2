@@ -17,6 +17,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="VertexRent.Api.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="Sql\**\*.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Fonts\**\*" CopyToOutputDirectory="PreserveNewest" />
     <EmbeddedResource Include="Templates\contrato_base.docx" LogicalName="contrato_base.docx" />

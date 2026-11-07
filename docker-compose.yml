@@ -68,8 +68,8 @@ services:
       retries: 3
 
   # ─── Migraciones (se ejecuta una vez y termina) ──────────────────────────
-  # Reutiliza la imagen del backend; `--migrate` recrea el esquema completo
-  # (DESTRUCTIVO: hace DROP de las tablas antes de crearlas).
+  # Reutiliza la imagen del backend; `--reset` BORRA toda la base y la recrea (DESTRUCTIVO, solo desarrollo).
+  # El esquema normal se aplica solo cuando arranca el backend (Sql/migrations).
   migrate:
     build:
       context: .
@@ -86,9 +86,9 @@ services:
       DB_NAME: ${DB_NAME:-departamentos}
       DB_USER: ${DB_USER:-depas_user}
       DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en el .env}
-      # Confirmación explícita: --migrate hace DROP de todas las tablas (ver start.sh).
+      # Confirmación explícita: --reset borra toda la base (ver start.sh).
       CONFIRM_RESET: ${CONFIRM_RESET:-}
-    command: ["--migrate"]
+    command: ["--reset"]
     healthcheck:
       disable: true
     profiles:

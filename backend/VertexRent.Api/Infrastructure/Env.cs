@@ -66,9 +66,16 @@ public static class Env
         return PlatformEmails().Any(p => p != e && Validator.NormalizeEmail(p) == canon);
     }
 
+    /// <summary>El correo es el del dueño de la plataforma o un alias suyo: nadie puede crear cuentas con él por rutas abiertas.</summary>
+    public static bool EsCorreoDePlataforma(string? email) => IsPlatformAdmin(email) || IsPlatformAlias(email);
+
     /// <summary>Entradas de PLATFORM_ADMIN_EMAILS que difieren de su forma canónica (nunca coincidirán con cuentas nuevas).</summary>
     public static IEnumerable<string> PlatformEmailsNoCanonicos() =>
         PlatformEmails().Where(p => Validator.NormalizeEmail(p) != p);
+
+    /// <summary>Entradas de PLATFORM_ADMIN_EMAILS que todavía no corresponden a ninguna cuenta (requiere la base de datos lista).</summary>
+    public static IEnumerable<string> PlatformEmailsSinCuenta() =>
+        PlatformEmails().Where(p => Db.Query("SELECT 1 FROM usuarios WHERE email = $1", p).GetAwaiter().GetResult().First == null);
 
     public static string JwtSecret => Get("JWT_SECRET") ?? "";
 }

@@ -166,7 +166,7 @@ export const api = {
   getEstadoPago: (inquilinoId: string) =>
     request<Pago | null, { cuotas: CuotaExtra[]; total_extra: number; total_abonado: number; saldo_pendiente: number; periodo: string }>('GET', `/pagos/estado/${inquilinoId}`),
   getEstadosActuales: () =>
-    request<{ inquilino_id: string; pago_id: string | null; monto: Numeric | null; confirmado: boolean; confirmado_en: string | null; rechazado: boolean; comprobante_url: string | null; total_abonado: Numeric }[]>('GET', '/pagos/estados-actuales'),
+    request<{ inquilino_id: string; pago_id: string | null; monto: Numeric | null; confirmado: boolean; confirmado_en: string | null; rechazado: boolean; tiene_comprobante: boolean; total_abonado: Numeric }[]>('GET', '/pagos/estados-actuales'),
   getPagoByToken: (token: string) => request<Pago & { nombre_completo: string; depto_numero: number; renta: Numeric }>('GET', `/pagos/info/${token}`),
   confirmarPago: (token: string) => request<Pago, { yaConfirmado?: boolean }>('POST', `/pagos/confirmar/${token}`, {}),
   subirComprobante: (inquilinoId: string, comprobante_url: string) => request<Pago>('POST', `/pagos/comprobante/${inquilinoId}`, { comprobante_url }),
@@ -175,11 +175,13 @@ export const api = {
   /** Deshace un pago registrado por error (solo dentro de las 24 h siguientes). */
   cancelarPago: (pagoId: string) => request<void>('DELETE', `/pagos/${pagoId}/cancelar`),
   rechazarPago: (pagoId: string, comentario?: string) => request<Pago>('POST', `/pagos/rechazar-admin/${pagoId}`, { comentario: comentario || '' }),
+  /** La imagen del comprobante de un pago (los listados solo indican si existe). */
+  getComprobante: (pagoId: string) => request<{ comprobante_url: string }>('GET', `/pagos/${pagoId}/comprobante`),
   getComprobantesPendientes: () => request<(Pick<Pago, 'id' | 'monto' | 'periodo' | 'comprobante_url' | 'comprobante_subido_en'> & { nombre_completo: string; depto_numero: number; inquilino_id: string })[]>('GET', '/pagos/comprobantes-pendientes'),
-  getHistorialPagos: (inquilinoId: string) => request<(Pago & { a_tiempo: boolean | null; fecha_pago: string; escaneado_por_nombre: string | null })[]>('GET', `/pagos/historial/${inquilinoId}`),
+  getHistorialPagos: (inquilinoId: string) => request<(Pago & { tiene_comprobante: boolean; a_tiempo: boolean | null; fecha_pago: string; escaneado_por_nombre: string | null })[]>('GET', `/pagos/historial/${inquilinoId}`),
 
-  registrarAbono: (d: { inquilino_id: string; periodo?: string; monto: number; fecha?: string; metodo?: string; nota?: string; comprobante_url?: string }) =>
-    request<{ abono: Abono; pago: Pago; totalAbonado: number; saldoPendiente: number }>('POST', '/pagos/abono', d),
+  registrarAbono: (d: { inquilino_id: string; periodo?: string; aplicar_a_deuda_antigua?: boolean; monto: number; fecha?: string; metodo?: string; nota?: string; comprobante_url?: string }) =>
+    request<{ abono: Abono; pago: Pago; totalAbonado: number; saldoPendiente: number; aplicado?: { periodo: string; monto: number }[] }>('POST', '/pagos/abono', d),
   getAbonosPago: (pagoId: string) => request<Abono[]>('GET', `/pagos/abonos/${pagoId}`),
   editarAbono: (id: string, d: { monto?: number; fecha?: string; metodo?: string; nota?: string }) =>
     request<{ abono: Abono; pago: Pago; totalAbonado: number; saldoPendiente: number }>('PUT', `/pagos/abono/${id}`, d),

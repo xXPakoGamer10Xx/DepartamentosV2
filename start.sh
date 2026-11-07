@@ -121,40 +121,27 @@ until docker compose exec -T db pg_isready -U "${DB_USER}" -d "${DB_NAME}" &>/de
 done
 echo "✅ PostgreSQL listo                    "
 
-# ─── Detectar si es el primer despliegue ────────────────────────────────────
-TABLE_EXISTS=$(docker compose exec -T db psql -U "${DB_USER}" -d "${DB_NAME}" -tAc \
-  "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='inquilinos'" \
-  2>/dev/null | tr -d '[:space:]' || echo "0")
-
-if [ "$FORCE_RESET" = "1" ] || [ "${TABLE_EXISTS:-0}" = "0" ]; then
-  if [ "$FORCE_RESET" = "1" ]; then
-    echo ""
-    echo "🔄 Reset forzado — ejecutando migraciones completas..."
+# ─── Esquema de base de datos ───────────────────────────────────────────────
+# El backend aplica solo las migraciones pendientes (Sql/migrations) cada vez que arranca,
+# también en el primer despliegue. Solo --reset borra datos y exige confirmación explícita.
+if [ "$FORCE_RESET" = "1" ]; then
+  echo ""
+  echo "⚠️  Esto BORRARÁ todos los datos de la base '${DB_NAME}'."
+  if [ -t 0 ]; then
+    read -r -p "   Escribe el nombre de la base para confirmar: " CONFIRMA
   else
-    echo ""
-    echo "🔄 Primer despliegue — creando esquema de base de datos..."
+    CONFIRMA="${CONFIRM_RESET:-}"
   fi
-
-  # --migrate borra TODAS las tablas: solo corre con confirmación explícita.
-  if [ "$FORCE_RESET" = "1" ]; then
-    echo "⚠️  Esto BORRARÁ todos los datos de la base '${DB_NAME}'."
-    if [ -t 0 ]; then
-      read -r -p "   Escribe el nombre de la base para confirmar: " CONFIRMA
-    else
-      CONFIRMA="${CONFIRM_RESET:-}"
-    fi
-    if [ "$CONFIRMA" != "$DB_NAME" ]; then
-      echo "❌ Confirmación incorrecta. No se borró nada."
-      exit 1
-    fi
+  if [ "$CONFIRMA" != "$DB_NAME" ]; then
+    echo "❌ Confirmación incorrecta. No se borró nada."
+    exit 1
   fi
   export CONFIRM_RESET="$DB_NAME"
   docker compose build migrate
   docker compose --profile tools run --rm migrate
-  echo "✅ Esquema creado"
+  echo "✅ Base de datos reiniciada"
 else
-  echo "✅ Base de datos ya inicializada — omitiendo migraciones"
-  echo "   (usa ./start.sh --reset para borrar todo y empezar de cero)"
+  echo "✅ Las migraciones pendientes se aplican al arrancar el backend"
 fi
 
 # ─── Construir y levantar backend ───────────────────────────────────────────

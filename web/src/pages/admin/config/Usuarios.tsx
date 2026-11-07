@@ -124,7 +124,7 @@ function NuevoUsuario({ open, onClose, onDone }: { open: boolean; onClose: () =>
         <Input label="Nombre completo *" value={f.nombre} onChange={e => { setError(''); setF({ ...f, nombre: e.target.value }) }} />
         <Input label="Correo *" type="email" value={f.email} onChange={e => { setError(''); setF({ ...f, email: e.target.value }) }} />
         <Input label="Contraseña *" type="password" autoComplete="new-password" placeholder="Mínimo 8 caracteres" value={f.password} onChange={e => { setError(''); setF({ ...f, password: e.target.value }) }} />
-        <Select label="Rol" value={f.rol} onChange={e => setF({ ...f, rol: e.target.value as User['rol'] })}><option value="cobrador">Colaborador (permisos a medida)</option><option value="inquilino">Inquilino</option><option value="admin">Administrador</option></Select>
+        <Select label="Rol" value={f.rol} onChange={e => setF({ ...f, rol: e.target.value as User['rol'] })}><option value="cobrador">Colaborador (permisos a medida)</option><option value="inquilino">Inquilino</option></Select>
         {f.rol === 'cobrador' && <PermisosEditor value={permisos} preset={preset} onChange={(p, pr) => { setPermisos(p); setPreset(pr) }} />}
         {error && <p role="alert" className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p>}
         <div className="pt-2">
@@ -148,7 +148,7 @@ function CambiarRol({ user, onClose, onDone }: { user: User | null; onClose: () 
   return (
     <Modal open={!!user} title={`Cambiar rol de ${user?.nombre_completo ?? ''}`} onClose={onClose}>
       <div className="space-y-5">
-        <Select label="Rol" value={rol} onChange={e => setRol(e.target.value as User['rol'])}><option value="admin">Administrador</option><option value="cobrador">Colaborador</option><option value="inquilino">Inquilino</option></Select>
+        <Select label="Rol" value={rol} onChange={e => setRol(e.target.value as User['rol'])}><option value="cobrador">Colaborador</option><option value="inquilino">Inquilino</option></Select>
         <div className="pt-2">
           <Button full loading={cambiar.isPending} disabled={rol === user?.rol} onClick={() => cambiar.mutate()}>Guardar rol</Button>
         </div>

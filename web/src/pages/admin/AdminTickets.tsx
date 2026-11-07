@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Clock, MessageSquare, Save, Trash2 } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { AnimatedNumber } from '../../components/ui/AnimatedNumber'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -19,6 +19,7 @@ import { fechaHora } from '../../lib/format'
 import { useSSE } from '../../lib/sse'
 import type { Ticket } from '../../lib/types'
 import { nombreVisible } from '../../lib/nombre'
+import { SIN_DATOS } from '../../lib/vacio'
 
 type Estado = Ticket['estado']
 const E = {
@@ -38,7 +39,7 @@ export default function AdminTickets() {
   const [filtro, setFiltro] = useState<Estado | 'todos'>('todos')
   const [mes, setMes] = useState(mesActual())
   const [selId, setSelId] = useState<string | null>(null)
-  const [nota, setNota] = useState('')
+  const [notaEditada, setNotaEditada] = useState<{ para: string; texto: string } | null>(null)
   const [borrar, setBorrar] = useState<Ticket | null>(null)
   const [detalleMovil, setDetalleMovil] = useState(false)
 
@@ -48,14 +49,15 @@ export default function AdminTickets() {
   useSSE('ticket_new', (d) => { refrescar(); if (d?.ticket?.titulo) toast(`🔔 Nuevo ticket: ${d.ticket.titulo} — Depto ${d.ticket.depto_numero}`, 'info') })
   useSSE('ticket_updated', refrescar)
 
-  const tickets = activos.data ?? []
+  const tickets = activos.data ?? SIN_DATOS
   const counts = useMemo(() => ({ abierto: tickets.filter(t => t.estado === 'abierto').length, en_revision: tickets.filter(t => t.estado === 'en_revision').length, resuelto: tickets.filter(t => t.estado === 'resuelto').length }), [tickets])
   const filtrados = filtro === 'todos' ? tickets : tickets.filter(t => t.estado === filtro)
-  const sel = tickets.find(t => t.id === selId) ?? null
-
-  // En escritorio se selecciona el primero automáticamente.
-  useEffect(() => { if (vista === 'activos' && !selId && filtrados.length) setSelId(filtrados[0].id) }, [vista, selId, filtrados])
-  useEffect(() => { setNota(sel?.nota_admin ?? '') }, [selId]) // eslint-disable-line react-hooks/exhaustive-deps
+  // En escritorio, si no hay selección se muestra el primero.
+  const selActivo = selId ?? (vista === 'activos' ? filtrados[0]?.id ?? null : null)
+  const sel = tickets.find(t => t.id === selActivo) ?? null
+  // La nota es la del ticket seleccionado, salvo que el admin la haya editado para ese mismo ticket.
+  const nota = notaEditada && notaEditada.para === sel?.id ? notaEditada.texto : sel?.nota_admin ?? ''
+  const setNota = (texto: string) => { if (sel) setNotaEditada({ para: sel.id, texto }) }
 
   const guardar = useMutation({
     mutationFn: (estado?: Estado) => api.updateTicket(sel!.id, { estado: estado ?? sel!.estado, nota_admin: nota }),
@@ -72,7 +74,7 @@ export default function AdminTickets() {
     const cfg = E[t.estado]
     return (
       <button onClick={() => { setSelId(t.id); setDetalleMovil(true) }}
-        className={`relative w-full overflow-hidden rounded-2xl border bg-card p-4 pl-5 text-left transition hover:bg-hover ${selId === t.id ? 'border-primary ring-1 ring-primary/40' : 'border-line'}`}>
+        className={`relative w-full overflow-hidden rounded-2xl border bg-card p-4 pl-5 text-left transition hover:bg-hover ${selActivo === t.id ? 'border-primary ring-1 ring-primary/40' : 'border-line'}`}>
         <span className={`absolute inset-y-0 left-0 w-1.5 ${cfg.bar}`} />
         <div className="flex items-start justify-between gap-2"><p className="font-bold leading-tight">{t.titulo}</p><Badge tone={cfg.tone}>{cfg.label}</Badge></div>
         <p className="mt-0.5 text-xs text-fg-2">{nombreVisible(t.inquilino_nombre)} · Depto {t.depto_numero}</p>

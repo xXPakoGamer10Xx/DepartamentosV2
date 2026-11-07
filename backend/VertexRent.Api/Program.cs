@@ -5,18 +5,19 @@ Env.LoadAll();
 
 var IS_PROD = Env.IsProd;
 
-// ── Modo migración: `dotnet VertexRent.Api.dll --migrate` ────────────────────
-if (args.Contains("--migrate"))
+// ── Modo reinicio: `dotnet VertexRent.Api.dll --reset` ───────────────────────
+// Las migraciones normales se aplican solas al arrancar; este modo BORRA toda la base y la recrea.
+if (args.Contains("--reset"))
 {
-    // DESTRUCTIVO (DROP de tablas): exige confirmar escribiendo el nombre de la base en CONFIRM_RESET.
+    // DESTRUCTIVO: exige confirmar escribiendo el nombre de la base en CONFIRM_RESET.
     var dbName = Env.Get("DB_NAME", "departamentos");
     if (Env.Get("CONFIRM_RESET") != dbName)
     {
-        Console.Error.WriteLine($"❌ --migrate borra TODAS las tablas de '{dbName}'. Para continuar define CONFIRM_RESET={dbName}.");
+        Console.Error.WriteLine($"❌ --reset borra TODOS los datos de '{dbName}'. Para continuar define CONFIRM_RESET={dbName}.");
         Environment.Exit(1);
     }
     Db.Init();
-    await Migrations.RunFullMigrate();
+    await Migrations.Reset();
     return;
 }
 
@@ -58,6 +59,9 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
     p.WithMethods("GET", "POST", "PUT", "PATCH", "DELETE").WithHeaders("Content-Type", "Authorization");
 }));
 
+// Un solo pool de conexiones para toda la app; el contenedor lo cierra al apagar.
+builder.Services.AddSingleton<IDb>(_ => Database.DesdeEntorno());
+
 builder.Services.AddHostedService<SchedulerService>();
 builder.Services.AddHostedService<BackupCronService>();
 
@@ -85,9 +89,12 @@ foreach (var e in Env.PlatformEmailsNoCanonicos())
 
 try
 {
-    Db.Init();
-    await Migrations.InitDb();
+    Db.Usar(app.Services.GetRequiredService<IDb>());
+    await Migrations.Apply();
     await ContratoMigracion.Run();
+    // Mientras el dueño no tenga cuenta, cualquiera podría registrar esa dirección y heredar el acceso a los respaldos.
+    foreach (var correo in Env.PlatformEmailsSinCuenta().ToList())
+        Console.Error.WriteLine($"⚠️  PLATFORM_ADMIN_EMAILS: '{correo}' aún no tiene cuenta. Regístrala TÚ primero: quien la cree obtiene acceso a los respaldos.");
     Console.WriteLine("✅ Conexión a PostgreSQL establecida");
 }
 catch (Exception ex)
@@ -129,7 +136,7 @@ app.Use(async (ctx, next) =>
     }
 });
 
-// Cabeceras de seguridad (equivalente a helmet; CSP desactivada porque el front es una SPA Expo).
+// Cabeceras de seguridad (equivalente a helmet).
 app.Use(async (ctx, next) =>
 {
     ctx.Response.OnStarting(() =>
@@ -180,23 +187,19 @@ app.Use(async (ctx, next) =>
 // Health check mínimo, sin exponer entorno/versión.
 app.MapGet("/health", () => Api.Json(new { status = "ok" }));
 
-// Service Worker (PWA + Web Push). Si el frontend desplegado trae su propio sw.js (web/), ese es el que se sirve;
-// el embebido solo es el respaldo para el frontend anterior (Expo). Debe vivir en la raíz para tener scope total.
+// Service Worker (PWA + Web Push): lo genera el build del frontend en ./public. Debe vivir en la raíz para tener scope total.
 app.MapGet("/sw.js", async (HttpContext c) =>
 {
     c.Response.Headers.CacheControl = "no-cache";
     foreach (var root in new[] { Path.Combine(AppContext.BaseDirectory, "public"), Path.Combine(Directory.GetCurrentDirectory(), "public") })
     {
         var file = Path.Combine(root, "sw.js");
-        if (File.Exists(file))
-        {
-            c.Response.ContentType = "application/javascript; charset=utf-8";
-            await c.Response.SendFileAsync(file);
-            return;
-        }
+        if (!File.Exists(file)) continue;
+        c.Response.ContentType = "application/javascript; charset=utf-8";
+        await c.Response.SendFileAsync(file);
+        return;
     }
-    c.Response.ContentType = "application/javascript; charset=utf-8";
-    await c.Response.WriteAsync(ServiceWorker.Js);
+    c.Response.StatusCode = 404;
 });
 
 AuthEndpoints.Map(app);
@@ -217,7 +220,7 @@ DepositosEndpoints.Map(app);
 ReportesEndpoints.Map(app);
 ContratosEndpoints.Map(app);
 
-// Frontend estático (SPA Expo) con fallback a index.html
+// Frontend estático (SPA) con fallback a index.html
 var publicPath = Path.Combine(AppContext.BaseDirectory, "public");
 if (!Directory.Exists(publicPath)) publicPath = Path.Combine(Directory.GetCurrentDirectory(), "public");
 if (Directory.Exists(publicPath))

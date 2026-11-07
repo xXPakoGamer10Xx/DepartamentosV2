@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Download, Eye, FileText, Landmark, Sparkles, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
@@ -28,8 +28,21 @@ const GUARDA: Record<string, string> = {
   config: 'Se guardará en tus datos de arrendador.',
 }
 
-/** Genera el contrato de un inquilino: elige plantilla, completa lo que falta y descarga PDF/Word. */
-export function GenerarContratoModal({ inquilinoId, onClose }: { inquilinoId: string | null; onClose: () => void }) {
+/**
+ * Genera el contrato de un inquilino: elige plantilla, completa lo que falta y descarga PDF/Word.
+ * Cada vez que se abre (o cambia el inquilino) el formulario se monta de nuevo, así que siempre empieza limpio.
+ */
+export function GenerarContratoModal(props: { inquilinoId: string | null; onClose: () => void }) {
+  const [anterior, setAnterior] = useState<string | null>(null)
+  const [apertura, setApertura] = useState(0)
+  if (props.inquilinoId !== anterior) {   // se ajusta durante el render, no en un efecto
+    setAnterior(props.inquilinoId)
+    if (props.inquilinoId) setApertura(n => n + 1)
+  }
+  return <GenerarContratoFormulario key={apertura} {...props} />
+}
+
+function GenerarContratoFormulario({ inquilinoId, onClose }: { inquilinoId: string | null; onClose: () => void }) {
   const qc = useQueryClient()
   const toast = useToast()
   const abierto = !!inquilinoId
@@ -37,8 +50,6 @@ export function GenerarContratoModal({ inquilinoId, onClose }: { inquilinoId: st
   const [completar, setCompletar] = useState<Record<string, string>>({})
   const [extra, setExtra] = useState<Record<string, string>>({})
   const [hecho, setHecho] = useState<{ id: string; version: number; aproximado: boolean; plantilla_nombre: string } | null>(null)
-
-  useEffect(() => { if (abierto) { setPlantillaId(''); setCompletar({}); setExtra({}); setHecho(null) } }, [abierto, inquilinoId])
 
   const prep = useQuery({
     queryKey: ['preparar-contrato', inquilinoId, plantillaId],

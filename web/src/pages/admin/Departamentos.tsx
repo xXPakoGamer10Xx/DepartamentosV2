@@ -20,12 +20,9 @@ import { useAuth } from '../../lib/auth'
 import { money, num } from '../../lib/format'
 import type { Departamento } from '../../lib/types'
 import { nombreVisible } from '../../lib/nombre'
+import { SIN_DATOS } from '../../lib/vacio'
+import { ESTADO_DEPTO } from '../../lib/estadoDepto'
 
-export const ESTADO_DEPTO = {
-  disponible: { label: 'Disponible', tone: 'success', bar: 'bg-success' },
-  ocupado: { label: 'Ocupado', tone: 'primary', bar: 'bg-primary' },
-  mantenimiento: { label: 'Mantenimiento', tone: 'warning', bar: 'bg-warning' },
-} as const
 
 const pisoDe = (n: number) => (n >= 100 ? Math.floor(n / 100) : null)
 
@@ -41,7 +38,7 @@ export default function Departamentos() {
   const deptos = useQuery({ queryKey: ['departamentos'], queryFn: async () => (await api.getDepartamentos()).data })
   const stats = useQuery({ queryKey: ['deptos-stats'], queryFn: async () => (await api.getDepartamentosStats()).data })
 
-  const lista = deptos.data ?? []
+  const lista = deptos.data ?? SIN_DATOS
   const pisos = useMemo(() => [...new Set(lista.map(d => pisoDe(d.numero)).filter((p): p is number => p !== null))].sort((a, b) => a - b), [lista])
   const visibles = lista.filter(d => piso === 'todos' || pisoDe(d.numero) === piso)
 

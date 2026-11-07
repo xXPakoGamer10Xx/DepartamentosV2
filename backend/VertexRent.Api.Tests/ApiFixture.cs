@@ -20,13 +20,6 @@ public sealed class ApiFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await _db.StartAsync();
-        // Igual que en producción: primero el esquema base (migrate.sql) y luego las migraciones incrementales al arrancar la API.
-        await using (var conn = new Npgsql.NpgsqlConnection(_db.GetConnectionString()))
-        {
-            await conn.OpenAsync();
-            await using var cmd = new Npgsql.NpgsqlCommand(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Sql", "migrate.sql")), conn);
-            await cmd.ExecuteNonQueryAsync();
-        }
         // La API lee su configuración del entorno: se define antes de crear el servidor.
         Environment.SetEnvironmentVariable("DB_HOST", _db.Hostname);
         Environment.SetEnvironmentVariable("DB_PORT", _db.GetMappedPublicPort(5432).ToString());
@@ -46,7 +39,38 @@ public sealed class ApiFixture : IAsyncLifetime
         await _db.DisposeAsync();
     }
 
-    public HttpClient NewClient() => _factory.CreateClient();
+    /// <summary>Para pruebas que necesitan alterar la base directamente.</summary>
+    public string ConnectionString => _db.GetConnectionString();
+
+    int _ips;
+
+    /// <summary>
+    /// Cada cliente simula una IP distinta (X-Forwarded-For): el limitador de intentos de acceso es por IP y, sin esto,
+    /// todas las pruebas comparten un solo cupo de 20 intentos fallidos.
+    /// </summary>
+    public HttpClient NewClient()
+    {
+        var http = _factory.CreateClient();
+        var n = Interlocked.Increment(ref _ips);
+        http.DefaultRequestHeaders.Add("X-Forwarded-For", $"10.{(n >> 16) & 255}.{(n >> 8) & 255}.{n & 255}");
+        return http;
+    }
+
+    readonly SemaphoreSlim _plataforma = new(1, 1);
+
+    /// <summary>La cuenta del dueño de la plataforma existe una sola vez en la base compartida.</summary>
+    public async Task<Session> PlatformAdmin()
+    {
+        await _plataforma.WaitAsync();
+        try
+        {
+            var http = NewClient();
+            var res = await http.PostAsJsonAsync("/api/auth/login", new { email = PlatformEmail, password = "Contrasena-123" });
+            if (res.IsSuccessStatusCode) return await Login(PlatformEmail);
+            return await Register(PlatformEmail, "admin");
+        }
+        finally { _plataforma.Release(); }
+    }
 
     public string UniqueEmail(string prefix) => $"{prefix}{Interlocked.Increment(ref _seq)}@prueba.test";
 

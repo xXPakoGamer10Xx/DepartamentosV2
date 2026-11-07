@@ -11,14 +11,15 @@ import { ProgressBar } from '../components/ui/ProgressBar'
 import { Spinner } from '../components/ui/Spinner'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { diaPago, EPS, rowState, toSaldo, type EstadoActual, type RowState, type Saldo } from '../lib/cobranza'
+import { diaYDiasDelMes, mesActualLabel } from '../lib/fecha'
+import { diaPago, EPS, restanteMes, rowState, toSaldo, type EstadoActual, type RowState, type Saldo } from '../lib/cobranza'
 import { fecha, iniciales, money, num } from '../lib/format'
 import { useSSE } from '../lib/sse'
 import { useUsaApp } from '../lib/usaApp'
 import { nombreVisible } from '../lib/nombre'
 
 type Tab = 'atrasados' | 'porpagar' | 'pagados' | 'extras' | 'deposito'
-interface Fila { id: string; nombre: string; raw: string; depto: number; renta: number; dia: number | null; state: RowState; saldo: Saldo }
+interface Fila { id: string; nombre: string; raw: string; depto: number; renta: number; resta: number; dia: number | null; state: RowState; saldo: Saldo }
 
 const diasHasta = (iso: string) => Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000)
 const SIN_SALDO: Saldo = { total: 0, vencida: 0, periodoVencido: null, cuotasExtra: 0, deposito: 0 }
@@ -49,7 +50,7 @@ export default function AdminHome() {
     const sal = new Map<string, Saldo>(saldosQ.data.map(s => [s.inquilino_id, toSaldo(s)]))
     return inquilinos.data.map(i => {
       const saldo = sal.get(i.id) ?? SIN_SALDO
-      return { id: i.id, nombre: nombreVisible(i.nombre_completo), raw: i.nombre_completo, depto: i.depto_numero, renta: num(i.renta), dia: diaPago(i.fecha_pago), state: rowState(est.get(i.id), saldo), saldo }
+      return { id: i.id, nombre: nombreVisible(i.nombre_completo), raw: i.nombre_completo, depto: i.depto_numero, renta: num(i.renta), resta: restanteMes(est.get(i.id), num(i.renta)), dia: diaPago(i.fecha_pago), state: rowState(est.get(i.id), saldo), saldo }
     })
   }, [inquilinos.data, estados.data, saldosQ.data])
 
@@ -80,7 +81,7 @@ export default function AdminHome() {
 
   // ── Próximos pagos (7 días) ──
   const proximos = useMemo(() => {
-    const hoy = new Date(); const d = hoy.getDate(); const dim = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate()
+    const { dia: d, dim } = diaYDiasDelMes()
     return listas.porpagar.filter(f => f.state === 'pendiente' && f.dia)
       .map(f => ({ ...f, en: f.dia! >= d ? f.dia! - d : dim - d + f.dia! })).filter(f => f.en <= 7).sort((a, b) => a.en - b.en)
   }, [listas.porpagar])
@@ -88,7 +89,7 @@ export default function AdminHome() {
   const abiertos = (tickets.data ?? []).filter(t => t.estado !== 'resuelto')
   const s = stats.data
   const total = num(s?.total); const ocupados = num(s?.ocupados)
-  const mes = new Date().toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })
+  const mes = mesActualLabel()
   const cargandoCobranza = verCobranza && (inquilinos.isLoading || estados.isLoading || saldosQ.isLoading)
 
   const TABS: { v: Tab; label: string; n: number; tone: string }[] = [
@@ -98,7 +99,7 @@ export default function AdminHome() {
     { v: 'extras', label: 'Cuotas extra', n: listas.extras.length, tone: 'text-warning' },
     { v: 'deposito', label: 'Falta depósito', n: listas.deposito.length, tone: 'text-primary' },
   ]
-  const montoDe = (f: Fila): number => ({ atrasados: f.saldo.vencida, porpagar: f.renta, pagados: f.renta, extras: f.saldo.cuotasExtra, deposito: f.saldo.deposito })[tab]
+  const montoDe = (f: Fila): number => ({ atrasados: f.saldo.vencida, porpagar: f.resta, pagados: f.renta, extras: f.saldo.cuotasExtra, deposito: f.saldo.deposito })[tab]
   const colorMonto = { atrasados: 'text-danger', porpagar: 'text-fg', pagados: 'text-success', extras: 'text-warning', deposito: 'text-primary' }[tab]
 
   return (
@@ -226,7 +227,7 @@ export default function AdminHome() {
                     <li key={f.id}>
                       <Link to={`/pagos/${f.id}`} className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-hover/50">
                         <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{f.nombre}</span><span className="text-xs text-muted">Depto {f.depto}</span></span>
-                        <span className="text-right"><span className="block text-sm font-bold">{money(f.renta)}</span><span className="text-[11px] font-semibold text-muted">{f.en === 0 ? 'Hoy' : f.en === 1 ? 'Mañana' : `En ${f.en} días`}</span></span>
+                        <span className="text-right"><span className="block text-sm font-bold">{money(f.resta)}</span><span className="text-[11px] font-semibold text-muted">{f.en === 0 ? 'Hoy' : f.en === 1 ? 'Mañana' : `En ${f.en} días`}</span></span>
                       </Link>
                     </li>
                   ))}

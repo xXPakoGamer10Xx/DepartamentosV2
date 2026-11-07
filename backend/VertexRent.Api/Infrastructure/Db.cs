@@ -27,12 +27,24 @@ public sealed class QueryResult
     public Row? First => Rows.Count > 0 ? Rows[0] : null;
 }
 
-public static class Db
+/// <summary>Acceso a PostgreSQL. Se registra en el contenedor de dependencias (un solo pool para toda la app).</summary>
+public interface IDb
 {
-    static NpgsqlDataSource? _ds;
-    static readonly TimeZoneInfo LocalTz = TimeZoneInfo.Local;
+    Task<QueryResult> Query(string sql, params object?[] args);
+    /// <summary>Ejecuta varias consultas en una sola transacción (equivalente a withTransaction).</summary>
+    Task<T> Tx<T>(Func<DbTx, Task<T>> fn);
+    NpgsqlConnectionStringBuilder ConnString();
+}
 
-    public static void Init()
+/// <summary>Implementación sobre <see cref="NpgsqlDataSource"/>; el contenedor la cierra al apagar la app.</summary>
+public sealed class Database : IDb, IAsyncDisposable
+{
+    readonly NpgsqlDataSource _ds;
+
+    public Database(NpgsqlDataSource ds) { _ds = ds; }
+
+    /// <summary>Crea la conexión con la configuración del entorno (DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD).</summary>
+    public static Database DesdeEntorno()
     {
         var csb = new NpgsqlConnectionStringBuilder
         {
@@ -44,21 +56,20 @@ public static class Db
             MaxPoolSize = 20,
             Timeout = 15,
         };
-        _ds = NpgsqlDataSource.Create(csb.ConnectionString);
+        return new Database(NpgsqlDataSource.Create(csb.ConnectionString));
     }
 
-    public static NpgsqlConnectionStringBuilder ConnString() => new(_ds!.ConnectionString);
+    public NpgsqlConnectionStringBuilder ConnString() => new(_ds.ConnectionString);
 
-    public static async Task<QueryResult> Query(string sql, params object?[] args)
+    public async Task<QueryResult> Query(string sql, params object?[] args)
     {
-        await using var conn = await _ds!.OpenConnectionAsync();
-        return await Run(conn, null, sql, args);
+        await using var conn = await _ds.OpenConnectionAsync();
+        return await Db.Run(conn, null, sql, args);
     }
 
-    /// <summary>Ejecuta varias consultas en una sola transacción (equivalente a withTransaction).</summary>
-    public static async Task<T> Tx<T>(Func<DbTx, Task<T>> fn)
+    public async Task<T> Tx<T>(Func<DbTx, Task<T>> fn)
     {
-        await using var conn = await _ds!.OpenConnectionAsync();
+        await using var conn = await _ds.OpenConnectionAsync();
         await using var tx = await conn.BeginTransactionAsync();
         try
         {
@@ -72,6 +83,32 @@ public static class Db
             throw;
         }
     }
+
+    public ValueTask DisposeAsync() => _ds.DisposeAsync();
+}
+
+/// <summary>
+/// Fachada estática sobre la <see cref="IDb"/> activa. Los repositorios la usan directamente; se asigna una sola vez al
+/// arrancar (<see cref="Usar"/>) con la instancia del contenedor. Permite migrar los módulos a inyección por constructor
+/// uno a uno sin tocar el resto.
+/// </summary>
+public static class Db
+{
+    static IDb? _db;
+
+    /// <summary>Asigna la instancia que usarán todas las consultas.</summary>
+    public static void Usar(IDb db) => _db = db;
+
+    /// <summary>Atajo para el modo --reset y las pruebas, que no pasan por el contenedor.</summary>
+    public static void Init() => _db = Database.DesdeEntorno();
+
+    static IDb Actual => _db ?? throw new InvalidOperationException("La base de datos no está inicializada (Db.Usar / Db.Init).");
+
+    public static NpgsqlConnectionStringBuilder ConnString() => Actual.ConnString();
+    public static Task<QueryResult> Query(string sql, params object?[] args) => Actual.Query(sql, args);
+    public static Task<T> Tx<T>(Func<DbTx, Task<T>> fn) => Actual.Tx(fn);
+
+    static readonly TimeZoneInfo LocalTz = TimeZoneInfo.Local;
 
     internal static async Task<QueryResult> Run(NpgsqlConnection conn, NpgsqlTransaction? tx, string sql, object?[] args)
     {

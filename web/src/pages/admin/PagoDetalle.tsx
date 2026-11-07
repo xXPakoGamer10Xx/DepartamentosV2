@@ -1,8 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  AlertTriangle, Ban, Banknote, CalendarClock, CheckCircle2, ChevronDown, FileImage, HandCoins, History, Pencil, Plus, Printer,
-  ShieldAlert, Trash2, Undo2, Wallet, XCircle,
-} from 'lucide-react'
+import { AlertTriangle, Banknote, CalendarClock, CheckCircle2, ChevronDown, FileImage, HandCoins, History, Plus, Printer, ShieldAlert, Trash2, Undo2, Wallet, XCircle } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Badge } from '../../components/ui/Badge'
@@ -10,26 +7,26 @@ import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { Input } from '../../components/ui/Input'
 import { Modal } from '../../components/ui/Modal'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { ProgressBar } from '../../components/ui/ProgressBar'
-import { Select } from '../../components/ui/Select'
 import { Spinner } from '../../components/ui/Spinner'
-import { Textarea } from '../../components/ui/Textarea'
 import { useToast } from '../../components/ui/Toast'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { detectBankInfo, getBankBrand } from '../../lib/bank'
-import { hoyISO, puedeCancelar } from '../../lib/cobranza'
+import { puedeCancelar } from '../../lib/cobranza'
 import { fecha, fechaHora, money, num, periodoLabel } from '../../lib/format'
 import { buildReciboHtml, imprimirHtml } from '../../lib/recibo'
 import { useSSE } from '../../lib/sse'
 import type { Abono } from '../../lib/types'
 import { nombreVisible } from '../../lib/nombre'
-
-const KEYS = ['estado-pago', 'abonos', 'deposito-saldo', 'deposito-abonos', 'promesas', 'saldo', 'historial-pagos-admin', 'estados-actuales', 'saldos', 'resumen-deuda', 'cuotas']
-const errMsg = (e: unknown, f: string) => (e instanceof Error ? e.message : f)
+import { Abonos } from './pago/Abonos'
+import { AbonoModal } from './pago/AbonoModal'
+import { RechazarModal } from './pago/RechazarModal'
+import { CuotaModal } from './pago/CuotaModal'
+import { Promesa } from './pago/Promesa'
+import { KEYS, errMsg } from './pago/comun'
 
 export default function PagoDetalle() {
   const { id = '' } = useParams()
@@ -308,181 +305,3 @@ export default function PagoDetalle() {
     </div>
   )
 }
-
-function Abonos({ items, editable, onEdit, onDelete }: { items: Abono[]; editable: boolean; onEdit: (a: Abono) => void; onDelete: (a: Abono) => void }) {
-  if (!items.length) return <p className="text-sm text-muted">Sin abonos registrados</p>
-  return (
-    <ul className="divide-y divide-line">
-      {items.map(a => (
-        <li key={a.id} className="flex items-center gap-3 py-2.5 text-sm">
-          <span className="min-w-0 flex-1">
-            <span className="block font-semibold">{fecha(a.fecha)} · {a.metodo === 'transferencia' ? 'Transferencia' : 'Efectivo'}</span>
-            <span className="block truncate text-xs text-muted">{[a.nota, a.registrado_por_nombre && `por ${a.registrado_por_nombre}`].filter(Boolean).join(' · ') || '—'}</span>
-          </span>
-          <b className="text-success">{money(a.monto)}</b>
-          {editable && (
-            <span className="flex gap-1">
-              <button onClick={() => onEdit(a)} aria-label="Editar abono" className="grid size-8 place-items-center rounded-lg text-muted hover:bg-hover hover:text-fg"><Pencil className="size-4" /></button>
-              <button onClick={() => onDelete(a)} aria-label="Eliminar abono" className="grid size-8 place-items-center rounded-lg text-muted hover:bg-danger-soft hover:text-danger"><Trash2 className="size-4" /></button>
-            </span>
-          )}
-        </li>
-      ))}
-    </ul>
-  )
-}
-
-function AbonoModal({ state, inquilinoId, metodoDefault, onClose, onSaved }: { state: { tipo: 'renta' | 'deposito'; abono?: Abono; periodo?: string; saldo?: number } | null; inquilinoId: string; metodoDefault: string; onClose: () => void; onSaved: () => void }) {
-  return (
-    <Modal open={!!state} title={`${state?.abono ? 'Editar' : 'Registrar'} abono ${state?.tipo === 'deposito' ? 'al depósito' : 'a la renta'}${state?.periodo ? ` de ${periodoLabel(state.periodo)}` : ''}`} onClose={onClose}>
-      {state && <AbonoForm key={state.abono?.id ?? `${state.tipo}-${state.periodo ?? ''}`} state={state} inquilinoId={inquilinoId} metodoDefault={metodoDefault} onSaved={onSaved} />}
-    </Modal>
-  )
-}
-
-function AbonoForm({ state, inquilinoId, metodoDefault, onSaved }: { state: { tipo: 'renta' | 'deposito'; abono?: Abono; periodo?: string; saldo?: number }; inquilinoId: string; metodoDefault: string; onSaved: () => void }) {
-  const toast = useToast()
-  const a = state.abono
-  const [monto, setMonto] = useState(a ? String(num(a.monto)) : state.saldo && state.saldo > 0 ? String(state.saldo) : '')
-  const [fechaV, setFechaV] = useState(a ? String(a.fecha).slice(0, 10) : hoyISO())
-  const [metodo, setMetodo] = useState(a?.metodo ?? metodoDefault)
-  const [nota, setNota] = useState(a?.nota ?? '')
-  const [error, setError] = useState('')
-
-  const guardar = useMutation({
-    mutationFn: () => {
-      const m = parseFloat(monto)
-      const body = { monto: m, fecha: fechaV || undefined, metodo, nota: nota.trim() || undefined }
-      if (state.tipo === 'deposito') return a ? api.editarAbonoDeposito(a.id, body) : api.registrarAbonoDeposito({ inquilino_id: inquilinoId, ...body })
-      return a ? api.editarAbono(a.id, body) : api.registrarAbono({ inquilino_id: inquilinoId, periodo: state.periodo, ...body })
-    },
-    onSuccess: () => { toast('Abono guardado', 'success'); onSaved() },
-    onError: (e) => setError(errMsg(e, 'No se pudo guardar el abono')),
-  })
-  const submit = () => {
-    if (!(parseFloat(monto) > 0)) return setError('Ingresa un monto válido mayor a cero')
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaV)) return setError('Indica la fecha del abono')
-    setError(''); guardar.mutate()
-  }
-  return (
-    <div className="space-y-5">
-      <Input label="Monto *" type="number" inputMode="decimal" min={0} step="0.01" value={monto} autoFocus onChange={e => { setError(''); setMonto(e.target.value) }} />
-      <div className="grid grid-cols-2 gap-3">
-        <Input label="Fecha" type="date" value={fechaV} max={hoyISO()} onChange={e => setFechaV(e.target.value)} />
-        <Select label="Método" value={metodo} onChange={e => setMetodo(e.target.value)}><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option></Select>
-      </div>
-      <Textarea label="Nota (opcional)" className="min-h-20" value={nota} onChange={e => setNota(e.target.value)} />
-      {error && <p role="alert" className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p>}
-      <div className="pt-2">
-        <Button full loading={guardar.isPending} onClick={submit}>Guardar abono</Button>
-      </div>
-    </div>
-  )
-}
-
-function RechazarModal({ open, pagoId, onClose, onDone }: { open: boolean; pagoId?: string; onClose: () => void; onDone: () => void }) {
-  const toast = useToast()
-  const [c, setC] = useState('')
-  const rechazar = useMutation({
-    mutationFn: () => api.rechazarPago(pagoId!, c.trim()),
-    onSuccess: () => { toast('Comprobante rechazado', 'success'); setC(''); onDone() },
-    onError: (e) => toast(errMsg(e, 'No se pudo rechazar'), 'error'),
-  })
-  return (
-    <Modal open={open} title="Rechazar comprobante" onClose={onClose}>
-      <div className="space-y-5">
-        <p className="text-sm text-fg-2">El inquilino recibirá una notificación. Puedes indicarle el motivo.</p>
-        <Textarea label="Motivo (opcional)" placeholder="Ej. La imagen está borrosa" value={c} onChange={e => setC(e.target.value)} />
-        <div className="pt-2">
-          <Button full variant="danger" loading={rechazar.isPending} icon={<Ban className="size-4" />} onClick={() => rechazar.mutate()}>Rechazar comprobante</Button>
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
-function CuotaModal({ open, inquilinoId, onClose, onSaved }: { open: boolean; inquilinoId: string; onClose: () => void; onSaved: () => void }) {
-  const toast = useToast()
-  const [concepto, setConcepto] = useState('')
-  const [monto, setMonto] = useState('')
-  const [error, setError] = useState('')
-  const crear = useMutation({
-    mutationFn: () => api.createCuota({ inquilino_id: inquilinoId, concepto: concepto.trim(), monto: parseFloat(monto) }),
-    onSuccess: () => { toast('Cargo agregado', 'success'); setConcepto(''); setMonto(''); onSaved() },
-    onError: (e) => setError(errMsg(e, 'No se pudo agregar el cargo')),
-  })
-  const submit = () => {
-    if (!concepto.trim()) return setError('El concepto es requerido')
-    if (!(parseFloat(monto) > 0)) return setError('Ingresa un monto válido mayor a cero')
-    setError(''); crear.mutate()
-  }
-  return (
-    <Modal open={open} title="Nuevo cargo extra" onClose={onClose}>
-      <div className="space-y-5">
-        <Input label="Concepto *" placeholder="Ej. Reparación de llave" value={concepto} onChange={e => { setError(''); setConcepto(e.target.value) }} />
-        <Input label="Monto *" type="number" inputMode="decimal" min={0} step="0.01" value={monto} onChange={e => { setError(''); setMonto(e.target.value) }} />
-        {error && <p role="alert" className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p>}
-        <div className="pt-2">
-          <Button full loading={crear.isPending} onClick={submit}>Agregar cargo</Button>
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
-function Promesa({ inquilinoId, pagoId, fechaActual, bloqueado, puedeEditar, onChange }: { inquilinoId: string; pagoId: string | null; fechaActual: string | null; bloqueado: boolean; puedeEditar: boolean; onChange: () => void }) {
-  const toast = useToast()
-  const guardada = fechaActual ? String(fechaActual).slice(0, 10) : ''
-  const [valor, setValor] = useState(guardada)
-  const [editando, setEditando] = useState(!guardada)
-  // si el servidor cambia la fecha (otro admin, refresco), se refleja salvo que se esté editando
-  const [prev, setPrev] = useState(guardada)
-  if (prev !== guardada) { setPrev(guardada); if (!editando) setValor(guardada) }
-
-  const guardar = useMutation({
-    mutationFn: (f: string | null) => (pagoId ? api.setPromesa(pagoId, f) : api.setPromesaInquilino(inquilinoId, f)),
-    onSuccess: (_r, f) => { toast(f ? 'Promesa guardada' : 'Promesa eliminada', 'success'); setEditando(!f); if (!f) setValor(''); onChange() },
-    onError: (e) => toast(errMsg(e, 'No se pudo guardar la promesa'), 'error'),
-  })
-
-  const rapido = (dias: number) => { const d = new Date(); d.setDate(d.getDate() + dias); setValor(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10)); setEditando(true) }
-  const preview = (() => {
-    if (!valor) return null
-    const d = new Date(`${valor}T12:00:00`); const hoy = new Date(); hoy.setHours(0, 0, 0, 0); d.setHours(0, 0, 0, 0)
-    const diff = Math.round((d.getTime() - hoy.getTime()) / 86_400_000)
-    const raw = d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-    const rel = diff === 0 ? 'hoy' : diff === 1 ? 'mañana' : diff === -1 ? 'ayer' : diff > 1 ? `en ${diff} días` : `hace ${Math.abs(diff)} días`
-    return `${raw.charAt(0).toUpperCase()}${raw.slice(1)} · ${rel}`
-  })()
-
-  return (
-    <Card className="space-y-3">
-      <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-fg-2"><CalendarClock className="size-4" /> Promesa de pago</h2>
-      {bloqueado ? <p className="text-sm text-muted">El periodo ya está pagado.</p> : !puedeEditar && !guardada ? <p className="text-sm text-muted">Sin promesa registrada.</p> : (
-        <>
-          {!editando && guardada ? (
-            <div className="flex items-center justify-between gap-3 rounded-xl bg-warning-soft p-3">
-              <p className="text-sm font-semibold">{preview}</p>
-              {puedeEditar && <Button variant="ghost" className="h-8 px-3" onClick={() => setEditando(true)}>Cambiar</Button>}
-            </div>
-          ) : puedeEditar && (
-            <>
-              <div className="flex flex-wrap gap-2">
-                {[['Hoy', 0], ['Mañana', 1], ['En 3 días', 3], ['En 1 semana', 7]].map(([l, d]) => (
-                  <button key={l as string} onClick={() => rapido(d as number)} className="rounded-full border border-line bg-card px-3 py-1 text-xs font-semibold text-fg-2 hover:bg-hover">{l}</button>
-                ))}
-              </div>
-              <Input type="date" aria-label="Fecha prometida" value={valor} onChange={e => setValor(e.target.value)} />
-              {preview && <p className="text-xs text-fg-2">{preview}</p>}
-              <div className="flex gap-2">
-                <Button className="h-10 flex-1" loading={guardar.isPending} disabled={!valor} onClick={() => guardar.mutate(valor)}>Guardar promesa</Button>
-                {guardada && <Button variant="secondary" className="h-10" loading={guardar.isPending} onClick={() => guardar.mutate(null)}>Quitar</Button>}
-              </div>
-            </>
-          )}
-        </>
-      )}
-    </Card>
-  )
-}
-

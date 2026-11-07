@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { AlertCircle, ArrowLeft, Banknote, Calendar, CheckCircle2, CircleDashed, CreditCard, FileImage, Receipt, TriangleAlert } from 'lucide-react'
 import { useState } from 'react'
+import { useToast } from '../../components/ui/Toast'
 import { Link } from 'react-router-dom'
 import { AnimatedNumber } from '../../components/ui/AnimatedNumber'
 import { Badge } from '../../components/ui/Badge'
@@ -12,7 +13,14 @@ import { api } from '../../lib/api'
 import { fechaHora, money, periodoLabel } from '../../lib/format'
 
 export default function InquilinoPagos() {
+  const toast = useToast()
   const [verComprobante, setVerComprobante] = useState<string | null>(null)
+  // La imagen no viaja en el historial: se pide solo al abrirla.
+  const abrirComprobante = useMutation({
+    mutationFn: async (pagoId: string) => (await api.getComprobante(pagoId)).data.comprobante_url,
+    onSuccess: setVerComprobante,
+    onError: (e) => toast(e instanceof Error ? e.message : 'No se pudo abrir el comprobante', 'error'),
+  })
 
   const { data: pagos, isLoading } = useQuery({
     queryKey: ['historial-pagos'],
@@ -78,8 +86,8 @@ export default function InquilinoPagos() {
                       {p.metodo === 'transferencia' ? 'Transferencia bancaria' : 'Efectivo (QR)'}
                     </p>
                   </div>
-                  {p.comprobante_url && (
-                    <button onClick={() => setVerComprobante(p.comprobante_url)} className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-primary-soft px-3 py-1.5 text-xs font-bold text-primary transition hover:bg-primary/20">
+                  {p.tiene_comprobante && (
+                    <button onClick={() => abrirComprobante.mutate(p.id)} disabled={abrirComprobante.isPending && abrirComprobante.variables === p.id} className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-primary-soft px-3 py-1.5 text-xs font-bold text-primary transition hover:bg-primary/20">
                       <FileImage className="size-3.5" /> Ver comprobante
                     </button>
                   )}

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Check, CheckCircle2, ChevronDown, FileUp, Loader2, Plus, Sparkles, X } from 'lucide-react'
+import { AlertTriangle, Check, CheckCircle2, ChevronDown, FileUp, Loader2, Sparkles, X } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Button } from '../../../components/ui/Button'
@@ -12,44 +12,17 @@ import { Spinner } from '../../../components/ui/Spinner'
 import { useToast } from '../../../components/ui/Toast'
 import { api } from '../../../lib/api'
 import { leerDocx, pickDocx } from '../../../lib/file'
-import type { CampoPlantilla, Marca, VariableContrato } from '../../../lib/types'
+import type { CampoPlantilla, VariableContrato } from '../../../lib/types'
+import { SIN_DATOS } from '../../../lib/vacio'
+import { VariableSelect } from './plantilla/VariableSelect'
+import { NuevoCampoForm } from './plantilla/NuevoCampoForm'
+import { pintarMarcas } from './plantilla/pintar'
+import { NUEVO_CAMPO, slug, type MarcaUI, type Seleccion } from './plantilla/comun'
 
 type Paso = 'subir' | 'analizando' | 'revisar' | 'probar'
 const PASOS: { id: Paso; label: string }[] = [
   { id: 'subir', label: 'Subir' }, { id: 'analizando', label: 'Analizar' }, { id: 'revisar', label: 'Revisar' }, { id: 'probar', label: 'Probar y guardar' },
 ]
-const NUEVO_CAMPO = '__nuevo__'
-
-interface MarcaUI extends Marca { texto: string; confianza?: number }
-interface Seleccion { p: string; ini: number; fin: number; texto: string }
-
-const slug = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30) || 'dato'
-
-/** Envuelve en <mark> cada rango del texto de su párrafo. Los offsets son de texto plano del párrafo. */
-function pintarMarcas(root: HTMLElement, marcas: MarcaUI[], etiqueta: (key: string) => string) {
-  marcas.forEach((m, i) => {
-    const p = root.querySelector<HTMLElement>(`[data-p="${m.p}"]`)
-    if (!p) return
-    const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT)
-    const nodes: { node: Text; start: number }[] = []
-    let pos = 0
-    while (walker.nextNode()) { const n = walker.currentNode as Text; nodes.push({ node: n, start: pos }); pos += n.length }
-    const envolver: { node: Text; a: number; b: number }[] = []
-    for (const { node, start } of nodes) {
-      const a = Math.max(m.ini, start), b = Math.min(m.fin, start + node.length)
-      if (a < b) envolver.push({ node, a: a - start, b: b - start })
-    }
-    envolver.forEach(({ node, a, b }, k) => {
-      const range = document.createRange(); range.setStart(node, a); range.setEnd(node, b)
-      const mark = document.createElement('mark')
-      mark.dataset.i = String(i)
-      if (m.key.startsWith('campo_')) mark.className = 'pers'
-      mark.title = etiqueta(m.key)
-      if (k === envolver.length - 1) mark.dataset.label = etiqueta(m.key)
-      range.surroundContents(mark)
-    })
-  })
-}
 
 export default function PlantillaAsistente() {
   const { id: idParam } = useParams()
@@ -77,7 +50,7 @@ export default function PlantillaAsistente() {
   const docRef = useRef<HTMLDivElement | null>(null)
 
   const { data: cat } = useQuery({ queryKey: ['variables-contrato'], queryFn: async () => (await api.getVariablesContrato()).data, staleTime: 5 * 60_000 })
-  const variables = cat?.variables ?? []
+  const variables = cat?.variables ?? SIN_DATOS
   const grupos = useMemo(() => {
     const g = new Map<string, VariableContrato[]>()
     for (const v of variables) g.set(v.grupo, [...(g.get(v.grupo) ?? []), v])
@@ -374,36 +347,5 @@ export default function PlantillaAsistente() {
         <NuevoCampoForm onCrear={crearCampo} />
       </Modal>
     </div>
-  )
-}
-
-function VariableSelect({ valor, variables, campos, onChange, placeholder, full = true }: {
-  valor: string; variables: [string, VariableContrato[]][]; campos: CampoPlantilla[]; onChange: (v: string) => void; placeholder?: string; full?: boolean
-}) {
-  return (
-    <div className={full ? 'relative w-full' : 'relative w-full sm:w-64'}>
-      <select value={valor} aria-label="Dato que se rellenará" onChange={e => onChange(e.target.value)}
-        className="h-10 w-full cursor-pointer appearance-none truncate rounded-xl border border-line bg-card pl-3.5 pr-9 text-sm font-semibold text-fg transition hover:border-line-strong focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25">
-        {placeholder && <option value="">{placeholder}</option>}
-        {variables.map(([g, vs]) => <optgroup key={g} label={g}>{vs.map(v => <option key={v.key} value={v.key}>{v.etiqueta}</option>)}</optgroup>)}
-        {campos.length > 0 && <optgroup label="Personalizados">{campos.map(c => <option key={c.key} value={c.key}>{c.etiqueta}</option>)}</optgroup>}
-        <option value={NUEVO_CAMPO}>➕ Dato personalizado…</option>
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-fg-2" />
-    </div>
-  )
-}
-
-function NuevoCampoForm({ onCrear }: { onCrear: (etiqueta: string, tipo: CampoPlantilla['tipo']) => void }) {
-  const [et, setEt] = useState('')
-  const [tipo, setTipo] = useState<CampoPlantilla['tipo']>('texto')
-  return (
-    <form className="space-y-4" onSubmit={e => { e.preventDefault(); if (et.trim()) onCrear(et, tipo) }}>
-      <Input label="¿Cómo se llama este dato?" hint="Se te preguntará cada vez que generes un contrato. Ej.: Uso del inmueble, Cajones de estacionamiento." value={et} onChange={e => setEt(e.target.value)} autoFocus />
-      <Select label="Tipo" value={tipo} onChange={e => setTipo(e.target.value as CampoPlantilla['tipo'])}>
-        <option value="texto">Texto</option><option value="numero">Número</option><option value="fecha">Fecha</option>
-      </Select>
-      <Button type="submit" full icon={<Plus className="size-4" />} disabled={!et.trim()}>Crear dato</Button>
-    </form>
   )
 }

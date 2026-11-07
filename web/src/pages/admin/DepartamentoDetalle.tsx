@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Building2, Hammer, Package, Trash2, UserRound, Wallet } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -14,7 +14,8 @@ import { useToast } from '../../components/ui/Toast'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { fecha, money } from '../../lib/format'
-import { ESTADO_DEPTO, InventarioEditor } from './Departamentos'
+import { ESTADO_DEPTO } from '../../lib/estadoDepto'
+import { InventarioEditor } from './Departamentos'
 import { nombreVisible } from '../../lib/nombre'
 
 export default function DepartamentoDetalle() {
@@ -26,21 +27,21 @@ export default function DepartamentoDetalle() {
   const navigate = useNavigate()
   const toast = useToast()
   const [borrar, setBorrar] = useState(false)
-  const [inv, setInv] = useState<string[] | null>(null)
+  const [invEditado, setInvEditado] = useState<string[] | null>(null)
 
   const q = useQuery({ queryKey: ['departamento', n], queryFn: async () => (await api.getDepartamento(n)).data, refetchInterval: 30_000 })
   const cuentas = useQuery({ queryKey: ['cuentas'], queryFn: async () => (await api.getCuentas()).data, enabled: esAdmin })
   const deuda = useQuery({ queryKey: ['resumen-deuda'], queryFn: async () => (await api.getResumenDeuda()).data, enabled: can('pagos') })
 
   const depto = q.data
-  // El inventario se edita en local; se sincroniza con el servidor mientras el admin no haya cambiado nada.
-  useEffect(() => { if (depto && inv === null) setInv(depto.inventario_base ?? []) }, [depto, inv])
-  const inventarioSucio = depto && inv !== null && JSON.stringify(inv) !== JSON.stringify(depto.inventario_base ?? [])
+  // El inventario muestra lo del servidor hasta que el admin lo edita; desde entonces manda su copia local.
+  const inv = invEditado ?? depto?.inventario_base ?? null
+  const inventarioSucio = depto && invEditado !== null && JSON.stringify(invEditado) !== JSON.stringify(depto.inventario_base ?? [])
 
   const refrescar = () => { void qc.invalidateQueries({ queryKey: ['departamento', n] }); void qc.invalidateQueries({ queryKey: ['departamentos'] }); void qc.invalidateQueries({ queryKey: ['deptos-stats'] }) }
   const err = (m: string) => (e: unknown) => toast(e instanceof Error ? e.message : m, 'error')
 
-  const guardarInv = useMutation({ mutationFn: () => api.updateDepartamento(n, { inventario_base: inv }), onSuccess: () => { toast('Inventario actualizado', 'success'); refrescar() }, onError: err('No se pudo guardar') })
+  const guardarInv = useMutation({ mutationFn: () => api.updateDepartamento(n, { inventario_base: inv }), onSuccess: () => { toast('Inventario actualizado', 'success'); setInvEditado(null); refrescar() }, onError: err('No se pudo guardar') })
   const mantenimiento = useMutation({
     mutationFn: () => api.updateDepartamento(n, { estado: depto!.estado === 'mantenimiento' ? 'disponible' : 'mantenimiento' }),
     onSuccess: refrescar, onError: err('No se pudo cambiar el estado'),
@@ -105,7 +106,7 @@ export default function DepartamentoDetalle() {
             <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-fg-2"><Package className="size-4" /> Inventario base</h2>
             {esAdmin && inventarioSucio && <Button className="h-9 px-4" loading={guardarInv.isPending} onClick={() => guardarInv.mutate()}>Guardar inventario</Button>}
           </div>
-          <InventarioEditor items={inv ?? []} onChange={setInv} disabled={!esAdmin} />
+          <InventarioEditor items={inv ?? []} onChange={setInvEditado} disabled={!esAdmin} />
         </Card>
 
         <Card className="lg:col-span-2">

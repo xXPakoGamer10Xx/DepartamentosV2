@@ -266,7 +266,7 @@ function Transferencia({ inq, cfg, comprobanteUrl }: { inq: Inquilino; cfg: Conf
 function PagoEfectivo({ inq, cfg, qrToken, ambos }: { inq: Inquilino; cfg: Config; qrToken: string | null; ambos: boolean }) {
   const qc = useQueryClient()
   const toast = useToast()
-  const [qr, setQr] = useState<string | null>(null)
+  const [qrImg, setQrImg] = useState<{ clave: string; url: string } | null>(null)
 
   const generar = useMutation({
     mutationFn: () => api.generarQr(inq.id),
@@ -276,15 +276,17 @@ function PagoEfectivo({ inq, cfg, qrToken, ambos }: { inq: Inquilino; cfg: Confi
   const token = generar.data?.data.qr_token ?? qrToken
 
   // El QR se dibuja en el propio navegador: el token de pago no sale a ningún servicio externo.
+  const base = cfg.app_url?.trim().replace(/\/$/, '') || window.location.origin
+  const clave = token ? `${base}/confirmar/${token}` : null
   useEffect(() => {
-    if (!token) { setQr(null); return }
-    const base = cfg.app_url?.trim().replace(/\/$/, '') || window.location.origin
+    if (!clave) return
     let cancelled = false
-    QRCode.toDataURL(`${base}/confirmar/${token}`, { width: 280, margin: 2, errorCorrectionLevel: 'M' })
-      .then(u => { if (!cancelled) setQr(u) })
-      .catch(() => { if (!cancelled) setQr(null) })
+    QRCode.toDataURL(clave, { width: 280, margin: 2, errorCorrectionLevel: 'M' })
+      .then(url => { if (!cancelled) setQrImg({ clave, url }) })
+      .catch(() => { /* sin imagen: se muestra el estado de carga */ })
     return () => { cancelled = true }
-  }, [token, cfg.app_url])
+  }, [clave])
+  const qr = qrImg && qrImg.clave === clave ? qrImg.url : null
 
   const pasos = ['Genera el código QR', 'Muéstraselo al administrador', 'El admin lo escanea y confirma']
   return (

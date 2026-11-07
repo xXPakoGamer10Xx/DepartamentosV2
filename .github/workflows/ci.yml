@@ -2,6 +2,7 @@ name: CI
 
 # Corre en runners de GitHub (nunca en el runner propio del servidor): es seguro con pull_request.
 on:
+  workflow_call:
   pull_request:
   push:
     branches-ignore:
@@ -44,5 +45,6 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npx tsc -b
-      - run: npx oxlint
+      - run: npx oxlint --deny-warnings
+      - run: npm test
       - run: npm run build

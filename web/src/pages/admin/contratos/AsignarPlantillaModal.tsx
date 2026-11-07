@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
 import { Spinner } from '../../../components/ui/Spinner'
@@ -11,14 +11,13 @@ import type { Plantilla } from '../../../lib/types'
 export function AsignarPlantillaModal({ plantilla, onClose }: { plantilla: Plantilla | null; onClose: () => void }) {
   const qc = useQueryClient()
   const toast = useToast()
-  const [sel, setSel] = useState<Set<number>>(new Set())
+  const [editada, setEditada] = useState<{ para: string; sel: Set<number> } | null>(null)
   const { data: deptos = [], isLoading } = useQuery({ queryKey: ['departamentos'], queryFn: async () => (await api.getDepartamentos()).data, enabled: !!plantilla })
 
-  useEffect(() => {
-    if (!plantilla) return
-    // Las ya asignadas a esta plantilla llegan marcadas (el listado trae plantilla_id por propiedad).
-    setSel(new Set(deptos.filter(d => d.plantilla_id === plantilla.id).map(d => d.id)))
-  }, [plantilla, deptos])
+  // Las ya asignadas a esta plantilla llegan marcadas (el listado trae plantilla_id por propiedad); lo que el usuario cambie
+  // gana mientras sea para la misma plantilla.
+  const asignadas = useMemo(() => new Set(deptos.filter(d => d.plantilla_id === plantilla?.id).map(d => d.id)), [deptos, plantilla])
+  const sel = editada && editada.para === plantilla?.id ? editada.sel : asignadas
 
   const guardar = useMutation({
     mutationFn: () => api.asignarPlantilla(plantilla!.id, [...sel]),
@@ -31,7 +30,10 @@ export function AsignarPlantillaModal({ plantilla, onClose }: { plantilla: Plant
     onError: e => toast(e instanceof Error ? e.message : 'No se pudo asignar', 'error'),
   })
 
-  const toggle = (id: number) => setSel(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const toggle = (id: number) => {
+    const n = new Set(sel); if (n.has(id)) n.delete(id); else n.add(id)
+    if (plantilla) setEditada({ para: plantilla.id, sel: n })
+  }
 
   return (
     <Modal open={!!plantilla} title="Asignar a propiedades" onClose={onClose}>

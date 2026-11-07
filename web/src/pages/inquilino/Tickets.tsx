@@ -12,6 +12,7 @@ import { Spinner } from '../../components/ui/Spinner'
 import { Textarea } from '../../components/ui/Textarea'
 import { useToast } from '../../components/ui/Toast'
 import { api } from '../../lib/api'
+import { edadMs } from '../../lib/fecha'
 import { fecha } from '../../lib/format'
 import { useSSE } from '../../lib/sse'
 import type { Ticket } from '../../lib/types'
@@ -55,7 +56,7 @@ export default function InquilinoTickets() {
   })
 
   // El contador de "Eliminar (Ns)" solo corre si hay algún ticket dentro de la ventana de 5 min.
-  const hayEliminables = !!tickets?.some(t => Date.now() - new Date(t.created_at).getTime() < CINCO_MIN)
+  const hayEliminables = !!tickets?.some(t => edadMs(t.created_at) < CINCO_MIN)
   const now = useNow(hayEliminables)
 
   const crear = useMutation({
@@ -104,7 +105,7 @@ export default function InquilinoTickets() {
           {tickets.map(t => {
             const cfg = ESTADOS[t.estado]
             const restante = Math.max(0, CINCO_MIN - (now - new Date(t.created_at).getTime()))
-            const puedeBorrar = Date.now() - new Date(t.created_at).getTime() < CINCO_MIN && restante > 0
+            const puedeBorrar = edadMs(t.created_at) < CINCO_MIN && restante > 0
             return (
               <StaggerItem key={t.id}>
                 <Card className="relative overflow-hidden py-4 pl-6">
