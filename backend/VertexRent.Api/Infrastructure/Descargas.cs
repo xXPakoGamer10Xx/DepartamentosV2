@@ -14,4 +14,12 @@ public static class Descargas
         c.Response.Headers.ContentDisposition = $"inline; filename=\"{ascii}\"; filename*=UTF-8''{Uri.EscapeDataString(filename)}";
         return Results.File(pdf, "application/pdf");
     }
+
+    public static IResult Docx(HttpContext c, byte[] bytes, string filename)
+    {
+        var ascii = System.Text.RegularExpressions.Regex.Replace(filename.Normalize(NormalizationForm.FormD), @"\p{M}", "");
+        ascii = System.Text.RegularExpressions.Regex.Replace(ascii, @"[^\x20-\x7E]|[""\\]", "_");
+        c.Response.Headers.ContentDisposition = $"attachment; filename=\"{ascii}\"; filename*=UTF-8''{Uri.EscapeDataString(filename)}";
+        return Results.File(bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    }
 }

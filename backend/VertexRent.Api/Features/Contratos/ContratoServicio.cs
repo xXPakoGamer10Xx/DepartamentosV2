@@ -14,31 +14,21 @@ public static class ContratoServicio
     /// <summary>Inquilino + propiedad + arrendador + cuenta bancaria, ya mezclados en el diccionario de datos.</summary>
     public static async Task<ContratoContexto> CargarContexto(string adminId, string inquilinoId)
     {
-        var r = await Db.Query("SELECT * FROM inquilinos WHERE admin_id = $1 AND id = $2", adminId, inquilinoId);
-        var inq = r.First ?? throw new AppError("Inquilino no encontrado", 404);
+        var inq = await ContratosRepository.InquilinoDelPropietario(adminId, inquilinoId) ?? throw new AppError("Inquilino no encontrado", 404);
 
-        var cfgTask = Db.Query("SELECT clave, valor FROM configuracion WHERE admin_id = $1 AND clave = ANY($2)", adminId, ClavesConfig);
-        var deptoTask = Db.Query(
-            @"SELECT id, numero, descripcion, ubicacion, inventario_base, cuenta_bancaria_id, plantilla_id
-              FROM departamentos WHERE admin_id = $1 AND numero = $2", adminId, inq.S("depto_numero"));
-        var cuentaTask = Db.Query(
-            @"SELECT cb.banco_nombre, cb.banco_clabe, cb.banco_titular
-              FROM cuentas_bancarias cb
-              WHERE cb.admin_id = $1 AND cb.activo = TRUE
-                AND (cb.id = (SELECT d.cuenta_bancaria_id FROM departamentos d WHERE d.admin_id = $1 AND d.numero = $2)
-                     OR cb.es_predeterminada = TRUE)
-              ORDER BY (cb.id = (SELECT d.cuenta_bancaria_id FROM departamentos d WHERE d.admin_id = $1 AND d.numero = $2)) DESC
-              LIMIT 1", adminId, inq.S("depto_numero"));
+        var cfgTask = ContratosRepository.ConfigArrendador(adminId, ClavesConfig);
+        var deptoTask = ContratosRepository.Departamento(adminId, inq.S("depto_numero"));
+        var cuentaTask = ContratosRepository.CuentaParaDepartamento(adminId, inq.S("depto_numero"));
         await Task.WhenAll(cfgTask, deptoTask, cuentaTask);
 
-        var config = cfgTask.Result.Rows.ToDictionary(x => x.S("clave")!, x => x.S("valor") ?? "");
-        var depto = deptoTask.Result.First;
+        var config = cfgTask.Result.ToDictionary(x => x.S("clave")!, x => x.S("valor") ?? "");
+        var depto = deptoTask.Result;
         var data = new Dictionary<string, object?>(inq);
         foreach (var k in ClavesConfig) data[k] = config.GetValueOrDefault(k) ?? "";
         data["inventario_base"] = depto?.J("inventario_base") ?? new JsonArray();
         data["propiedad_direccion"] = depto?.S("ubicacion") ?? "";
         data["propiedad_descripcion"] = depto?.S("descripcion") ?? "";
-        if (cuentaTask.Result.First is { } cu)
+        if (cuentaTask.Result is { } cu)
         {
             data["banco_nombre"] = cu.S("banco_nombre") ?? "";
             data["banco_clabe"] = cu.S("banco_clabe") ?? "";
@@ -61,9 +51,7 @@ public static class ContratoServicio
     {
         if (id == PlantillaSistema.Id) return Sistema();
         if (!Guid.TryParse(id, out _)) throw new AppError("Plantilla no encontrada", 404);
-        var r = await Db.Query(
-            "SELECT id, nombre, docx_plantilla, campos FROM plantillas_contrato WHERE admin_id = $1 AND id = $2", adminId, id);
-        return Mapear(r.First ?? throw new AppError("Plantilla no encontrada", 404));
+        return Mapear(await ContratosRepository.PlantillaCargable(adminId, id) ?? throw new AppError("Plantilla no encontrada", 404));
     }
 
     static PlantillaCargada Mapear(Row p) =>
@@ -72,14 +60,10 @@ public static class ContratoServicio
     /// <summary>Plantilla que corresponde a un inquilino: la suya → la de su propiedad → la predeterminada → la del sistema.</summary>
     public static async Task<PlantillaCargada> ResolverPlantilla(string adminId, Row inquilino, Row? depto)
     {
-        var r = await Db.Query(
-            @"SELECT id, nombre, docx_plantilla, campos FROM plantillas_contrato
-              WHERE admin_id = $1 AND estado = 'lista' AND (id = $2 OR id = $3 OR predeterminada)
-              ORDER BY (id = $2) DESC NULLS LAST, (id = $3) DESC NULLS LAST, predeterminada DESC
-              LIMIT 1",
-            adminId, Guid.TryParse(inquilino.S("plantilla_id"), out var g1) ? g1 : (object?)null,
-            Guid.TryParse(depto?.S("plantilla_id"), out var g2) ? g2 : (object?)null);
-        return r.First != null ? Mapear(r.First) : Sistema();
+        var r = await ContratosRepository.PlantillaResuelta(adminId,
+            Guid.TryParse(inquilino.S("plantilla_id"), out var g1) ? g1 : null,
+            Guid.TryParse(depto?.S("plantilla_id"), out var g2) ? g2 : null);
+        return r != null ? Mapear(r) : Sistema();
     }
 
     /// <summary>Valores de los campos personalizados, listos para rellenar la plantilla.</summary>
