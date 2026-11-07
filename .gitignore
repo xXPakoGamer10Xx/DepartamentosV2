@@ -8,7 +8,8 @@ web/dist/
 # Secretos y datos locales (nunca al repositorio)
 .env
 **/.env
-backups/
+# Solo la carpeta de respaldos de la raíz (sin esto también se ignoraría Features/Backups en macOS)
+/backups/
 *.xlsx
 *.docx
 !backend/VertexRent.Api/Templates/contrato_base.docx
