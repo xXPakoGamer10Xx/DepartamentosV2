@@ -13,8 +13,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Compuerta de calidad en runners de GitHub: si falla, no se despliega nada.
+  ci:
+    name: Pruebas
+    uses: ./.github/workflows/ci.yml
+
   deploy:
     name: Despliegue en el servidor
+    needs: ci
     # Runner propio instalado en el servidor (etiqueta "nethrent").
     runs-on: [self-hosted, nethrent]
     timeout-minutes: 30
@@ -26,6 +32,21 @@ jobs:
           cd "$PROJECT_DIR"
           git fetch origin main
           git merge --ff-only origin/main
+
+      # Respaldo antes de tocar nada: si la nueva versión migra mal, hay a dónde volver. Conserva los 5 últimos.
+      - name: Respaldo previo al despliegue
+        run: |
+          set -o pipefail
+          cd "$PROJECT_DIR"
+          mkdir -p backups
+          if docker compose ps --status running --services | grep -qx db; then
+            f="backups/pre-deploy_$(date +%Y%m%d-%H%M%S)_${GITHUB_SHA::7}.sql.gz"
+            docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip > "$f"
+            test -s "$f" && echo "Respaldo guardado: $f"
+            ls -1t backups/pre-deploy_*.sql.gz 2>/dev/null | tail -n +6 | xargs -r rm -f
+          else
+            echo "La base de datos aún no está corriendo: no hay nada que respaldar."
+          fi
 
       - name: Construir imagen del backend (con la web incluida)
         run: |

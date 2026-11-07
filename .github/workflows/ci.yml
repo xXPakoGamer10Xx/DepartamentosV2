@@ -2,6 +2,7 @@ name: CI
 
 # Corre en runners de GitHub (nunca en el runner propio del servidor): es seguro con pull_request.
 on:
+  workflow_call:
   pull_request:
   push:
     branches-ignore:
