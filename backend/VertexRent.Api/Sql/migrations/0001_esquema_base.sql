@@ -1,7 +1,5 @@
-
--- Wipe existing tables for SaaS rewrite
-DROP TABLE IF EXISTS plantillas_contrato CASCADE;
-DROP TABLE IF EXISTS usuarios, departamentos, inquilinos, pagos, contratos, auditoria, backups, configuracion, tickets, cuotas_extra CASCADE;
+-- 0001: esquema base. NO destructivo (solo CREATE ... IF NOT EXISTS).
+-- Las bases ya existentes lo reciben como "aplicado" sin ejecutarlo (ver Migrations.cs).
 
 -- Extensiones
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";

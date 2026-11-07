@@ -5,18 +5,19 @@ Env.LoadAll();
 
 var IS_PROD = Env.IsProd;
 
-// ── Modo migración: `dotnet VertexRent.Api.dll --migrate` ────────────────────
-if (args.Contains("--migrate"))
+// ── Modo reinicio: `dotnet VertexRent.Api.dll --reset` ───────────────────────
+// Las migraciones normales se aplican solas al arrancar; este modo BORRA toda la base y la recrea.
+if (args.Contains("--reset"))
 {
-    // DESTRUCTIVO (DROP de tablas): exige confirmar escribiendo el nombre de la base en CONFIRM_RESET.
+    // DESTRUCTIVO: exige confirmar escribiendo el nombre de la base en CONFIRM_RESET.
     var dbName = Env.Get("DB_NAME", "departamentos");
     if (Env.Get("CONFIRM_RESET") != dbName)
     {
-        Console.Error.WriteLine($"❌ --migrate borra TODAS las tablas de '{dbName}'. Para continuar define CONFIRM_RESET={dbName}.");
+        Console.Error.WriteLine($"❌ --reset borra TODOS los datos de '{dbName}'. Para continuar define CONFIRM_RESET={dbName}.");
         Environment.Exit(1);
     }
     Db.Init();
-    await Migrations.RunFullMigrate();
+    await Migrations.Reset();
     return;
 }
 
@@ -86,7 +87,7 @@ foreach (var e in Env.PlatformEmailsNoCanonicos())
 try
 {
     Db.Init();
-    await Migrations.InitDb();
+    await Migrations.Apply();
     await ContratoMigracion.Run();
     Console.WriteLine("✅ Conexión a PostgreSQL establecida");
 }

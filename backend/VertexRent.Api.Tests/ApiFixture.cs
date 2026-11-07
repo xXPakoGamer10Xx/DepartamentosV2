@@ -20,13 +20,6 @@ public sealed class ApiFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await _db.StartAsync();
-        // Igual que en producción: primero el esquema base (migrate.sql) y luego las migraciones incrementales al arrancar la API.
-        await using (var conn = new Npgsql.NpgsqlConnection(_db.GetConnectionString()))
-        {
-            await conn.OpenAsync();
-            await using var cmd = new Npgsql.NpgsqlCommand(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Sql", "migrate.sql")), conn);
-            await cmd.ExecuteNonQueryAsync();
-        }
         // La API lee su configuración del entorno: se define antes de crear el servidor.
         Environment.SetEnvironmentVariable("DB_HOST", _db.Hostname);
         Environment.SetEnvironmentVariable("DB_PORT", _db.GetMappedPublicPort(5432).ToString());
