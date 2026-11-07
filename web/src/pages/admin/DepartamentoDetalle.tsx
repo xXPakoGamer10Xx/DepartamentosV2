@@ -14,7 +14,8 @@ import { useToast } from '../../components/ui/Toast'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { fecha, money } from '../../lib/format'
-import { ESTADO_DEPTO, InventarioEditor } from './Departamentos'
+import { ESTADO_DEPTO } from '../../lib/estadoDepto'
+import { InventarioEditor } from './Departamentos'
 import { nombreVisible } from '../../lib/nombre'
 
 export default function DepartamentoDetalle() {

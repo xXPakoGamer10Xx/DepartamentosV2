@@ -17,6 +17,8 @@ import { Stat } from '../../components/ui/Stat'
 import { useToast } from '../../components/ui/Toast'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
+import { periodoActual } from '../../lib/fecha'
+import { SIN_DATOS } from '../../lib/vacio'
 import { diaPago, EPS, puedeCancelar, restanteMes, rowState, toSaldo, type EstadoActual, type RowState, type Saldo } from '../../lib/cobranza'
 import { iniciales, money, num, periodoLabel } from '../../lib/format'
 import { useSSE } from '../../lib/sse'
@@ -75,7 +77,7 @@ export default function Pagos() {
 
   const estados = useMemo(() => new Map<string, EstadoActual>((estadosQ.data ?? []).map(e => [e.inquilino_id, e])), [estadosQ.data])
   const saldos = useMemo(() => new Map<string, Saldo>((saldosQ.data ?? []).map(s => [s.inquilino_id, toSaldo(s)])), [saldosQ.data])
-  const lista = inquilinos.data ?? []
+  const lista = inquilinos.data ?? SIN_DATOS
 
   const rows = useMemo(() => lista.map(i => ({ i, state: rowState(estados.get(i.id), saldos.get(i.id)) })), [lista, estados, saldos])
   const counts = useMemo(() => ({
@@ -154,7 +156,7 @@ export default function Pagos() {
     onSuccess: () => { setCancelar(null); setUndo(null); toast('Pago cancelado', 'success'); invalidar() },
   })
 
-  const mes = periodoLabel(new Date().toISOString().slice(0, 7))
+  const mes = periodoLabel(periodoActual())
   const loading = inquilinos.isLoading || estadosQ.isLoading
 
   const TABS: { key: Tab; label: string }[] = [

@@ -10,6 +10,7 @@ import { Spinner } from '../../components/ui/Spinner'
 import { Stat } from '../../components/ui/Stat'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
+import { anioActual } from '../../lib/fecha'
 import { num } from '../../lib/format'
 
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -19,8 +20,8 @@ const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1).replace('.0', '')
 
 export default function Reportes() {
   const { can } = useAuth()
-  const anioActual = new Date().getFullYear()
-  const [year, setYear] = useState(anioActual)
+  const anioHoy = anioActual()
+  const [year, setYear] = useState(anioHoy)
   const [hover, setHover] = useState<number | null>(null)
 
   const anual = useQuery({ queryKey: ['reporte-anual', year], queryFn: async () => (await api.getReporteAnual(year)).data })
@@ -30,7 +31,7 @@ export default function Reportes() {
 
   const meses = mensual.data?.meses?.length ? mensual.data.meses : MESES.map((_, i) => ({ mes: i + 1, renta: 0, extra: 0, deposito: 0, total: 0 }))
   const porDepto = mensual.data?.por_departamento ?? []
-  const anios = [...new Set([anioActual, ...(mensual.data?.anios_disponibles ?? [])])].sort((a, b) => b - a)
+  const anios = [...new Set([anioHoy, ...(mensual.data?.anios_disponibles ?? [])])].sort((a, b) => b - a)
   const maxMes = Math.max(1, ...meses.map(m => m.total))
   const total = anual.data?.total_general ?? 0
   const pct = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0)

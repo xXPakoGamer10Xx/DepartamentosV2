@@ -20,6 +20,7 @@ import { Textarea } from '../../components/ui/Textarea'
 import { useToast } from '../../components/ui/Toast'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
+import { diasHasta, enDiasISO } from '../../lib/fecha'
 import { detectBankInfo, getBankBrand } from '../../lib/bank'
 import { hoyISO, puedeCancelar } from '../../lib/cobranza'
 import { fecha, fechaHora, money, num, periodoLabel } from '../../lib/format'
@@ -445,11 +446,10 @@ function Promesa({ inquilinoId, pagoId, fechaActual, bloqueado, puedeEditar, onC
     onError: (e) => toast(errMsg(e, 'No se pudo guardar la promesa'), 'error'),
   })
 
-  const rapido = (dias: number) => { const d = new Date(); d.setDate(d.getDate() + dias); setValor(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10)); setEditando(true) }
+  const rapido = (dias: number) => { setValor(enDiasISO(dias)); setEditando(true) }
   const preview = (() => {
     if (!valor) return null
-    const d = new Date(`${valor}T12:00:00`); const hoy = new Date(); hoy.setHours(0, 0, 0, 0); d.setHours(0, 0, 0, 0)
-    const diff = Math.round((d.getTime() - hoy.getTime()) / 86_400_000)
+    const { diff, fecha: d } = diasHasta(valor)
     const raw = d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     const rel = diff === 0 ? 'hoy' : diff === 1 ? 'mañana' : diff === -1 ? 'ayer' : diff > 1 ? `en ${diff} días` : `hace ${Math.abs(diff)} días`
     return `${raw.charAt(0).toUpperCase()}${raw.slice(1)} · ${rel}`

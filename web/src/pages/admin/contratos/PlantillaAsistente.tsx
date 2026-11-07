@@ -13,6 +13,7 @@ import { useToast } from '../../../components/ui/Toast'
 import { api } from '../../../lib/api'
 import { leerDocx, pickDocx } from '../../../lib/file'
 import type { CampoPlantilla, Marca, VariableContrato } from '../../../lib/types'
+import { SIN_DATOS } from '../../../lib/vacio'
 
 type Paso = 'subir' | 'analizando' | 'revisar' | 'probar'
 const PASOS: { id: Paso; label: string }[] = [
@@ -77,7 +78,7 @@ export default function PlantillaAsistente() {
   const docRef = useRef<HTMLDivElement | null>(null)
 
   const { data: cat } = useQuery({ queryKey: ['variables-contrato'], queryFn: async () => (await api.getVariablesContrato()).data, staleTime: 5 * 60_000 })
-  const variables = cat?.variables ?? []
+  const variables = cat?.variables ?? SIN_DATOS
   const grupos = useMemo(() => {
     const g = new Map<string, VariableContrato[]>()
     for (const v of variables) g.set(v.grupo, [...(g.get(v.grupo) ?? []), v])

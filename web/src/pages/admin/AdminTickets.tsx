@@ -19,6 +19,7 @@ import { fechaHora } from '../../lib/format'
 import { useSSE } from '../../lib/sse'
 import type { Ticket } from '../../lib/types'
 import { nombreVisible } from '../../lib/nombre'
+import { SIN_DATOS } from '../../lib/vacio'
 
 type Estado = Ticket['estado']
 const E = {
@@ -48,7 +49,7 @@ export default function AdminTickets() {
   useSSE('ticket_new', (d) => { refrescar(); if (d?.ticket?.titulo) toast(`🔔 Nuevo ticket: ${d.ticket.titulo} — Depto ${d.ticket.depto_numero}`, 'info') })
   useSSE('ticket_updated', refrescar)
 
-  const tickets = activos.data ?? []
+  const tickets = activos.data ?? SIN_DATOS
   const counts = useMemo(() => ({ abierto: tickets.filter(t => t.estado === 'abierto').length, en_revision: tickets.filter(t => t.estado === 'en_revision').length, resuelto: tickets.filter(t => t.estado === 'resuelto').length }), [tickets])
   const filtrados = filtro === 'todos' ? tickets : tickets.filter(t => t.estado === filtro)
   const sel = tickets.find(t => t.id === selId) ?? null

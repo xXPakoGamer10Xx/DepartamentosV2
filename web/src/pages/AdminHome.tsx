@@ -11,6 +11,7 @@ import { ProgressBar } from '../components/ui/ProgressBar'
 import { Spinner } from '../components/ui/Spinner'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { diaYDiasDelMes, mesActualLabel } from '../lib/fecha'
 import { diaPago, EPS, rowState, toSaldo, type EstadoActual, type RowState, type Saldo } from '../lib/cobranza'
 import { fecha, iniciales, money, num } from '../lib/format'
 import { useSSE } from '../lib/sse'
@@ -80,7 +81,7 @@ export default function AdminHome() {
 
   // ── Próximos pagos (7 días) ──
   const proximos = useMemo(() => {
-    const hoy = new Date(); const d = hoy.getDate(); const dim = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate()
+    const { dia: d, dim } = diaYDiasDelMes()
     return listas.porpagar.filter(f => f.state === 'pendiente' && f.dia)
       .map(f => ({ ...f, en: f.dia! >= d ? f.dia! - d : dim - d + f.dia! })).filter(f => f.en <= 7).sort((a, b) => a.en - b.en)
   }, [listas.porpagar])
@@ -88,7 +89,7 @@ export default function AdminHome() {
   const abiertos = (tickets.data ?? []).filter(t => t.estado !== 'resuelto')
   const s = stats.data
   const total = num(s?.total); const ocupados = num(s?.ocupados)
-  const mes = new Date().toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })
+  const mes = mesActualLabel()
   const cargandoCobranza = verCobranza && (inquilinos.isLoading || estados.isLoading || saldosQ.isLoading)
 
   const TABS: { v: Tab; label: string; n: number; tone: string }[] = [

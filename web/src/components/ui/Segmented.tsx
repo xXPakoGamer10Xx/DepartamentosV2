@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { motion } from 'motion/react'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 export function Segmented<T extends string>({
   value,
@@ -15,16 +15,16 @@ export function Segmented<T extends string>({
   const btnRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const [pill, setPill] = useState<{ left: number; width: number } | null>(null)
 
-  const updatePill = () => {
+  const updatePill = useCallback(() => {
     const el = btnRefs.current[value]
     if (el) {
       setPill({ left: el.offsetLeft, width: el.offsetWidth })
     }
-  }
+  }, [value])
 
   useLayoutEffect(() => {
     updatePill()
-  }, [value, options.length])
+  }, [updatePill, options.length])
 
   useEffect(() => {
     window.addEventListener('resize', updatePill)
@@ -34,7 +34,7 @@ export function Segmented<T extends string>({
       window.removeEventListener('resize', updatePill)
       ro?.disconnect()
     }
-  }, [value])
+  }, [updatePill])
 
   return (
     <div

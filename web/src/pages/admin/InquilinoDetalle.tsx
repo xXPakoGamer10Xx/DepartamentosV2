@@ -16,7 +16,7 @@ import { useAuth } from '../../lib/auth'
 import { fecha, fechaHora, iniciales, money, num } from '../../lib/format'
 import { GenerarContratoModal } from './contratos/GenerarContratoModal'
 import { useEstadosPago } from '../../lib/estadoPago'
-import { estadoChip, vencimiento } from './Inquilinos'
+import { estadoChip, vencimiento } from '../../lib/estadoInquilino'
 import { nombreVisible } from '../../lib/nombre'
 
 const METODO = { efectivo: 'Efectivo', transferencia: 'Transferencia bancaria', ambos: 'Efectivo o transferencia' } as const
