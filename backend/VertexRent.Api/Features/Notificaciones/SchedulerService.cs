@@ -44,7 +44,7 @@ public sealed class SchedulerService : BackgroundService
         if (valor == null) return DefaultRecordatoriosRenta;
         if (valor.Trim() == "") return Array.Empty<int>();
         return valor.Split(',')
-            .Select(s => ReportesEndpoints.ParseInt(s.Trim()))
+            .Select(s => Js.ParseInt(s.Trim()))
             .Where(n => n is >= 0 and <= 30).Select(n => n!.Value).Distinct().ToArray();
     }
 

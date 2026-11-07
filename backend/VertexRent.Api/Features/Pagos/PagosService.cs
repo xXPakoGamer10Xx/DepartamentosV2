@@ -207,8 +207,8 @@ public static class PagosService
             {
                 var confirmado = p.Dt("confirmado_en")!.Value;
                 var partes = p.S("periodo")!.Split('-');
-                var diaPago = ReportesEndpoints.ParseInt(p.S("fecha_pago"));
-                var gracia = ReportesEndpoints.ParseInt(p.S("dias_gracia")) ?? 0;
+                var diaPago = Js.ParseInt(p.S("fecha_pago"));
+                var gracia = Js.ParseInt(p.S("dias_gracia")) ?? 0;
                 if (diaPago == null) aTiempo = false; // día de pago ilegible: no se puede afirmar que fue a tiempo
                 else
                 {

@@ -73,6 +73,14 @@ public static class Js
         return m.Success && double.TryParse(m.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : double.NaN;
     }
 
+    /// <summary>parseInt(String(x), 10): entero inicial o null (NaN).</summary>
+    public static int? ParseInt(string? s)
+    {
+        if (s == null) return null;
+        var m = System.Text.RegularExpressions.Regex.Match(s.TrimStart(), @"^[+-]?\d+");
+        return m.Success && int.TryParse(m.Value, out var n) ? n : null;
+    }
+
     /// <summary>Periodo actual "YYYY-MM" en la zona horaria del servidor (igual que new Date() en Node).</summary>
     public static string CurrentPeriodo() { var n = DateTime.Now; return $"{n.Year}-{n.Month:00}"; }
 
