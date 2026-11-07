@@ -22,9 +22,7 @@ public static class ContratoMigracion
 
     static async Task MigrarGlobales()
     {
-        var r = await Db.Query(
-            "SELECT admin_id, clave, valor FROM configuracion WHERE clave IN ('contrato_docx_template','contrato_html_template','contrato_docx_nombre')");
-        foreach (var grupo in r.Rows.GroupBy(x => x.S("admin_id")!))
+        foreach (var grupo in (await ContratoMigracionRepository.ConfigAnterior()).GroupBy(x => x.S("admin_id")!))
         {
             var adminId = grupo.Key;
             string? Val(string k) => grupo.FirstOrDefault(x => x.S("clave") == k)?.S("valor");
@@ -41,12 +39,8 @@ public static class ContratoMigracion
                     docx = await DocxService.FromHtml(Val("contrato_html_template")!);
 
                 if (docx != null)
-                    await Db.Query(
-                        @"INSERT INTO plantillas_contrato (admin_id, nombre, docx_original, docx_plantilla, estado, predeterminada)
-                          VALUES ($1, $2, $3, $3, 'lista', NOT EXISTS (SELECT 1 FROM plantillas_contrato WHERE admin_id = $1 AND predeterminada))",
-                        adminId, nombre.Length > 120 ? nombre[..120] : nombre, docx);
-                await Db.Query(
-                    "DELETE FROM configuracion WHERE admin_id = $1 AND clave IN ('contrato_docx_template','contrato_html_template','contrato_docx_nombre')", adminId);
+                    await ContratoMigracionRepository.InsertarPlantillaGlobal(adminId, nombre.Length > 120 ? nombre[..120] : nombre, docx);
+                await ContratoMigracionRepository.BorrarConfigAnterior(adminId);
             }
             catch (Exception ex) { Console.Error.WriteLine($"⚠️  No se migró la plantilla del admin {adminId}: {ex.Message}"); }
         }
@@ -54,17 +48,14 @@ public static class ContratoMigracion
 
     static async Task MigrarPorInquilino()
     {
-        var r = await Db.Query("SELECT id, admin_id, nombre_completo, contrato_html FROM inquilinos WHERE contrato_html IS NOT NULL AND contrato_html <> ''");
-        foreach (var inq in r.Rows)
+        foreach (var inq in await ContratoMigracionRepository.InquilinosConContratoHtml())
         {
             try
             {
                 var docx = await DocxService.FromHtml(inq.S("contrato_html")!);
                 var nombre = $"Personalizado – {inq.S("nombre_completo")}";
-                var ins = await Db.Query(
-                    @"INSERT INTO plantillas_contrato (admin_id, nombre, docx_original, docx_plantilla, estado)
-                      VALUES ($1, $2, $3, $3, 'lista') RETURNING id", inq.S("admin_id"), nombre.Length > 120 ? nombre[..120] : nombre, docx);
-                await Db.Query("UPDATE inquilinos SET plantilla_id = $2, contrato_html = NULL WHERE id = $1", inq.S("id"), ins.First!.S("id"));
+                var plantillaId = await ContratoMigracionRepository.InsertarPlantillaDeInquilino(inq.S("admin_id")!, nombre.Length > 120 ? nombre[..120] : nombre, docx);
+                await ContratoMigracionRepository.AsignarPlantillaAInquilino(inq.S("id")!, plantillaId);
             }
             catch (Exception ex) { Console.Error.WriteLine($"⚠️  No se migró el contrato del inquilino {inq.S("id")}: {ex.Message}"); }
         }

@@ -10,6 +10,10 @@ public sealed class SchedulerService : BackgroundService
     static readonly TimeSpan MaxEspera = TimeSpan.FromHours(6);
     static readonly int[] DefaultRecordatoriosRenta = { 1, 0 };
 
+    /// <summary>Ejecuta las cuatro comprobaciones (lo que hace el programador cada día a las 9:00).</summary>
+    internal static Task EjecutarTodas() =>
+        Task.WhenAll(CheckRentaReminders(), CheckContratoExpiration(), CheckDepositoReminders(), CheckPromesaPagoReminders());
+
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         var cron = CronExpression.Parse("0 9 * * *");
@@ -27,7 +31,7 @@ public sealed class SchedulerService : BackgroundService
             if (DateTimeOffset.UtcNow < next.Value) continue;
 
             Console.WriteLine("[Scheduler] Ejecutando recordatorios de pago y contratos...");
-            await Task.WhenAll(CheckRentaReminders(), CheckContratoExpiration(), CheckDepositoReminders(), CheckPromesaPagoReminders());
+            await EjecutarTodas();
             Console.WriteLine("[Scheduler] Recordatorios enviados.");
             try { await Task.Delay(TimeSpan.FromSeconds(1), ct); } catch (OperationCanceledException) { return; }
         }
@@ -51,8 +55,7 @@ public sealed class SchedulerService : BackgroundService
     static async Task<Dictionary<string, int[]>> GetRecordatoriosRentaPorAdmin()
     {
         var map = new Dictionary<string, int[]>();
-        var r = await Db.Query("SELECT admin_id, valor FROM configuracion WHERE clave = 'recordatorios_renta_dias'");
-        foreach (var row in r.Rows) map[row.S("admin_id")!] = ParseRecordatorioDias(row.S("valor"));
+        foreach (var row in await RecordatoriosRepository.ConfigRecordatoriosRenta()) map[row.S("admin_id")!] = ParseRecordatorioDias(row.S("valor"));
         return map;
     }
 
@@ -67,24 +70,17 @@ public sealed class SchedulerService : BackgroundService
 
     static async Task<bool> YaNotificadoHoy(string usuarioId, string tipo, string subKey)
     {
-        var r = await Db.Query(
-            @"SELECT 1 FROM notificaciones
-              WHERE usuario_id = $1 AND tipo = $2 AND dedupe_key = $3
-                AND DATE(created_at) = CURRENT_DATE
-              LIMIT 1", usuarioId, tipo, subKey);
-        return r.RowCount > 0;
+        return await RecordatoriosRepository.YaNotificadoHoy(usuarioId, tipo, subKey);
     }
 
-    static async Task CheckRentaReminders()
+    internal static async Task CheckRentaReminders()
     {
         try
         {
             var porAdmin = await GetRecordatoriosRentaPorAdmin();
-            var inquilinos = await Db.Query(
-                @"SELECT i.id, i.usuario_id, i.fecha_pago, i.nombre_completo, i.depto_numero, i.admin_id
-                  FROM inquilinos i WHERE i.estado = 'activo'");
+            var inquilinos = await RecordatoriosRepository.InquilinosActivosParaRenta();
 
-            foreach (var inq in inquilinos.Rows)
+            foreach (var inq in inquilinos)
             {
                 var diaPago = ParseDiaPago(inq.S("fecha_pago"));
                 if (diaPago is null or 0) continue;
@@ -122,20 +118,15 @@ public sealed class SchedulerService : BackgroundService
         catch (Exception ex) { Console.Error.WriteLine($"[Scheduler] Error en checkRentaReminders: {ex}"); }
     }
 
-    static async Task CheckContratoExpiration()
+    internal static async Task CheckContratoExpiration()
     {
         try
         {
             var objetivo = new[] { 30, 7, 1 };
             var maxDias = objetivo.Max();
-            var inquilinos = await Db.Query(
-                $@"SELECT i.id, i.usuario_id, i.fecha_termino, i.nombre_completo, i.depto_numero, i.admin_id
-                   FROM inquilinos i
-                   WHERE i.estado = 'activo'
-                     AND i.fecha_termino <= CURRENT_DATE + INTERVAL '{maxDias + 1} days'
-                     AND i.fecha_termino >= CURRENT_DATE");
+            var inquilinos = await RecordatoriosRepository.ContratosPorVencer(maxDias + 1);
 
-            foreach (var inq in inquilinos.Rows)
+            foreach (var inq in inquilinos)
             {
                 var termino = inq.Dt("fecha_termino")!.Value.ToLocalTime();
                 var restantes = (int)Math.Round((termino - DateTime.Now.Date).TotalDays);
@@ -163,16 +154,14 @@ public sealed class SchedulerService : BackgroundService
         catch (Exception ex) { Console.Error.WriteLine($"[Scheduler] Error en checkContratoExpiration: {ex}"); }
     }
 
-    static async Task CheckDepositoReminders()
+    internal static async Task CheckDepositoReminders()
     {
         try
         {
             var objetivo = new[] { 3, 1, 0 };
-            var inquilinos = await Db.Query(
-                @"SELECT i.id, i.usuario_id, i.deposito_fechas, i.nombre_completo, i.depto_numero, i.admin_id
-                  FROM inquilinos i WHERE i.estado = 'activo'");
+            var inquilinos = await RecordatoriosRepository.InquilinosConDepositoDiferido();
 
-            foreach (var inq in inquilinos.Rows)
+            foreach (var inq in inquilinos)
             {
                 if (inq.J("deposito_fechas") is not JsonArray fechas) continue;
                 var hoy = DateTime.Now.Date;
@@ -213,18 +202,15 @@ public sealed class SchedulerService : BackgroundService
         catch (Exception ex) { Console.Error.WriteLine($"[Scheduler] Error en checkDepositoReminders: {ex}"); }
     }
 
-    static async Task CheckPromesaPagoReminders()
+    internal static async Task CheckPromesaPagoReminders()
     {
         try
         {
             var objetivo = new[] { 1, 0 };
-            var pagos = await Db.Query(
-                @"SELECT p.id, p.fecha_promesa, p.periodo, i.admin_id, i.nombre_completo, i.depto_numero
-                  FROM pagos p JOIN inquilinos i ON i.id = p.inquilino_id
-                  WHERE p.confirmado = false AND p.fecha_promesa IS NOT NULL");
+            var pagos = await RecordatoriosRepository.PromesasPendientes();
             var hoy = DateTime.Now.Date;
 
-            foreach (var pago in pagos.Rows)
+            foreach (var pago in pagos)
             {
                 var adminId = pago.S("admin_id");
                 if (string.IsNullOrEmpty(adminId)) continue;

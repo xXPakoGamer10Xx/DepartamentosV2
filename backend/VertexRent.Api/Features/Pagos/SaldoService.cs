@@ -4,33 +4,28 @@ public sealed record RecalculoPago(Row Pago, decimal TotalAbonado, bool Completo
 
 public static class SaldoService
 {
-    static Task<QueryResult> Q(DbTx? tx, string sql, params object?[] args) => tx != null ? tx.Query(sql, args) : Db.Query(sql, args);
-
     /// <summary>
     /// Recalcula el estado de un pago (periodo) a partir de la suma de sus abonos:
     /// transición pendiente/parcial/pagado (solo renta; las cuotas extra se cobran aparte).
     /// </summary>
     public static async Task<RecalculoPago> RecalcularPago(string pagoId, DbTx? tx = null)
     {
-        var pago = (await Q(tx, "SELECT * FROM pagos WHERE id = $1", pagoId)).First
-            ?? throw new AppError("Pago no encontrado", 404);
-
-        var sum = await Q(tx, "SELECT COALESCE(SUM(monto), 0) AS total FROM abonos_pago WHERE pago_id = $1", pagoId);
-        var totalAbonado = sum.First!.D("total");
+        var pago = await SaldoRepository.Pago(tx, pagoId) ?? throw new AppError("Pago no encontrado", 404);
+        var totalAbonado = await SaldoRepository.TotalAbonado(tx, pagoId);
         var monto = pago.D("monto");
         var completo = totalAbonado >= monto - 0.01m;
 
         if (completo && !pago.B("confirmado"))
         {
-            await Q(tx, "UPDATE pagos SET confirmado = true, confirmado_en = NOW() WHERE id = $1", pagoId);
+            await SaldoRepository.MarcarConfirmado(tx, pagoId);
         }
         else if (!completo && pago.B("confirmado"))
         {
             // Se editó/eliminó un abono y el pago dejó de estar completo: reabrir.
-            await Q(tx, "UPDATE pagos SET confirmado = false, confirmado_en = NULL WHERE id = $1", pagoId);
+            await SaldoRepository.Reabrir(tx, pagoId);
         }
 
-        var refreshed = (await Q(tx, "SELECT * FROM pagos WHERE id = $1", pagoId)).First!;
+        var refreshed = (await SaldoRepository.Pago(tx, pagoId))!;
         return new RecalculoPago(refreshed, totalAbonado, completo, Math.Max(monto - totalAbonado, 0));
     }
 
@@ -41,15 +36,12 @@ public static class SaldoService
     public static Task<RecalculoPago> AbonarSaldoPendiente(string pagoId, string? metodo, string nota, string? actor, decimal? rentaTope = null) =>
         Db.Tx(async tx =>
         {
-            var pago = (await tx.Query("SELECT * FROM pagos WHERE id = $1 FOR UPDATE", pagoId)).First
-                ?? throw new AppError("Pago no encontrado", 404);
-            var total = (await tx.Query("SELECT COALESCE(SUM(monto), 0) AS total FROM abonos_pago WHERE pago_id = $1", pagoId)).First!.D("total");
+            var pago = await SaldoRepository.PagoBloqueado(tx, pagoId) ?? throw new AppError("Pago no encontrado", 404);
+            var total = await SaldoRepository.TotalAbonado(tx, pagoId);
             var saldo = Math.Max(pago.D("monto") - total, 0);
             var monto = rentaTope is { } tope ? Math.Min(Math.Max(tope - total, 0), saldo) : saldo;
             if (monto > 0)
-                await tx.Query(
-                    "INSERT INTO abonos_pago (pago_id, monto, metodo, nota, registrado_por) VALUES ($1, $2, $3, $4, $5)",
-                    pagoId, monto, metodo, nota, actor);
+                await SaldoRepository.InsertarAbonoDeSaldo(tx, pagoId, monto, metodo, nota, actor);
             return await RecalcularPago(pagoId, tx);
         });
 
@@ -58,13 +50,9 @@ public static class SaldoService
         string pagoId, decimal monto, string? fecha, string? metodo, string? nota, string? comprobante, string? actor) =>
         Db.Tx(async tx =>
         {
-            var pago = (await tx.Query("SELECT confirmado FROM pagos WHERE id = $1 FOR UPDATE", pagoId)).First
-                ?? throw new AppError("Pago no encontrado", 404);
+            var pago = await SaldoRepository.PagoBloqueado(tx, pagoId) ?? throw new AppError("Pago no encontrado", 404);
             if (pago.B("confirmado")) throw new AppError("Este periodo ya está pagado por completo", 400);
-            var abono = (await tx.Query(
-                @"INSERT INTO abonos_pago (pago_id, monto, fecha, metodo, nota, comprobante_url, registrado_por)
-                  VALUES ($1, $2, COALESCE($3, CURRENT_DATE), $4, $5, $6, $7) RETURNING *",
-                pagoId, monto, fecha, metodo, nota, comprobante, actor)).First!;
+            var abono = await SaldoRepository.InsertarAbono(tx, pagoId, monto, fecha, metodo, nota, comprobante, actor);
             return (abono, await RecalcularPago(pagoId, tx));
         });
 }
