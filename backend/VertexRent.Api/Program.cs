@@ -130,7 +130,7 @@ app.Use(async (ctx, next) =>
     }
 });
 
-// Cabeceras de seguridad (equivalente a helmet; CSP desactivada porque el front es una SPA Expo).
+// Cabeceras de seguridad (equivalente a helmet).
 app.Use(async (ctx, next) =>
 {
     ctx.Response.OnStarting(() =>
@@ -181,23 +181,19 @@ app.Use(async (ctx, next) =>
 // Health check mínimo, sin exponer entorno/versión.
 app.MapGet("/health", () => Api.Json(new { status = "ok" }));
 
-// Service Worker (PWA + Web Push). Si el frontend desplegado trae su propio sw.js (web/), ese es el que se sirve;
-// el embebido solo es el respaldo para el frontend anterior (Expo). Debe vivir en la raíz para tener scope total.
+// Service Worker (PWA + Web Push): lo genera el build del frontend en ./public. Debe vivir en la raíz para tener scope total.
 app.MapGet("/sw.js", async (HttpContext c) =>
 {
     c.Response.Headers.CacheControl = "no-cache";
     foreach (var root in new[] { Path.Combine(AppContext.BaseDirectory, "public"), Path.Combine(Directory.GetCurrentDirectory(), "public") })
     {
         var file = Path.Combine(root, "sw.js");
-        if (File.Exists(file))
-        {
-            c.Response.ContentType = "application/javascript; charset=utf-8";
-            await c.Response.SendFileAsync(file);
-            return;
-        }
+        if (!File.Exists(file)) continue;
+        c.Response.ContentType = "application/javascript; charset=utf-8";
+        await c.Response.SendFileAsync(file);
+        return;
     }
-    c.Response.ContentType = "application/javascript; charset=utf-8";
-    await c.Response.WriteAsync(ServiceWorker.Js);
+    c.Response.StatusCode = 404;
 });
 
 AuthEndpoints.Map(app);
@@ -218,7 +214,7 @@ DepositosEndpoints.Map(app);
 ReportesEndpoints.Map(app);
 ContratosEndpoints.Map(app);
 
-// Frontend estático (SPA Expo) con fallback a index.html
+// Frontend estático (SPA) con fallback a index.html
 var publicPath = Path.Combine(AppContext.BaseDirectory, "public");
 if (!Directory.Exists(publicPath)) publicPath = Path.Combine(Directory.GetCurrentDirectory(), "public");
 if (Directory.Exists(publicPath))
