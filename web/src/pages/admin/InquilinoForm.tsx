@@ -13,7 +13,7 @@ import { Textarea } from '../../components/ui/Textarea'
 import { useToast } from '../../components/ui/Toast'
 import { api } from '../../lib/api'
 import {
-  addOneYear, buildFechaPago, esNotaAutomatica, normalizeFechaPago, notaDeposito, pagosMensuales, quincenaFechas, toISO, type DepositoTipo,
+  addOneYear, MAX_PAGOS_DEPOSITO, normalizarFechas, buildFechaPago, esNotaAutomatica, normalizeFechaPago, notaDeposito, pagosMensuales, quincenaFechas, toISO, type DepositoTipo,
 } from '../../lib/deposito'
 import { fecha } from '../../lib/format'
 import { compressImage, pickImage } from '../../lib/image'
@@ -103,8 +103,8 @@ function Formulario({ editId, initial, editando, desde, initialObsEdited }: { ed
     esNotaAutomatica(s.observaciones) ? { ...s, observaciones: notaDeposito(tipo, fechas) } : s
 
   const recalcDeposito = (s: FormState, tipo: DepositoTipo, inicio: string, dia: string, pagos: number): FormState => {
-    const fechas = tipo === 'quincenas' ? quincenaFechas(inicio) : tipo === 'personalizado' ? pagosMensuales(parseInt(dia, 10), pagos, inicio) : []
-    return conNotaDeposito({ ...s, depTipo: tipo, depDia: tipo === 'personalizado' ? dia : '', depPagos: pagos, depFechas: fechas }, tipo, fechas)
+    const fechas = tipo === 'quincenas' ? quincenaFechas(inicio) : tipo === 'personalizado' ? pagosMensuales(parseInt(dia, 10), pagos, inicio) : tipo === 'fechas' ? (s.depTipo === 'fechas' && s.depFechas.length ? s.depFechas : ['']) : []
+    return conNotaDeposito({ ...s, depTipo: tipo, depDia: tipo === 'personalizado' ? dia : '', depPagos: pagos, depFechas: fechas }, tipo, fechas.filter(Boolean))
   }
 
   const setInicio = (v: string) => {
@@ -114,6 +114,15 @@ function Formulario({ editId, initial, editando, desde, initialObsEdited }: { ed
     setF(s => {
       const next = { ...s, inicio: v, termino: toISO(addOneYear(d)), diaPago: diaManual ? s.diaPago : String(d.getDate()) }
       return s.depTipo === 'ninguno' ? next : recalcDeposito(next, s.depTipo, v, s.depDia || String(d.getDate()), s.depPagos)
+    })
+  }
+
+  /** Modalidad "fechas elegidas": cada renglón es una fecha de pago escogida en el calendario. */
+  const setFechasDep = (fn: (prev: string[]) => string[]) => {
+    setError('')
+    setF(s => {
+      const fechas = fn(s.depFechas)
+      return conNotaDeposito({ ...s, depFechas: fechas }, 'fechas', fechas.filter(Boolean))
     })
   }
 
@@ -147,7 +156,7 @@ function Formulario({ editId, initial, editando, desde, initialObsEdited }: { ed
         renta: Number(f.renta), renta_letra: f.rentaLetra, deposito: Number(f.deposito),
         fecha_pago: normalizeFechaPago(buildFechaPago(f.diaPago || '1')), fecha_inicio: f.inicio, fecha_termino: f.termino,
         fiador_nombre: f.fiador.trim(), fiador_telefono: f.telFiador, observaciones: f.observaciones,
-        metodo_pago: f.metodo, deposito_tipo: f.depTipo, deposito_fechas: f.depFechas,
+        metodo_pago: f.metodo, deposito_tipo: f.depTipo, deposito_fechas: f.depTipo === 'fechas' ? normalizarFechas(f.depFechas).fechas : f.depFechas,
       }
       return editId ? api.updateInquilino(editId, payload) : api.createInquilino(payload)
     },
@@ -168,6 +177,7 @@ function Formulario({ editId, initial, editando, desde, initialObsEdited }: { ed
     if (f.termino <= f.inicio) return setError('La fecha de término debe ser posterior a la de inicio.')
     const dia = parseInt(f.diaPago, 10)
     if (!dia || dia < 1 || dia > 31) return setError('El día de pago debe estar entre 1 y 31.')
+    if (f.depTipo === 'fechas' && normalizarFechas(f.depFechas).error) return setError(normalizarFechas(f.depFechas).error!)
     setError(''); guardar.mutate()
   }
 
@@ -238,6 +248,7 @@ function Formulario({ editId, initial, editando, desde, initialObsEdited }: { ed
               <option value="ninguno">Completo al inicio del contrato</option>
               <option value="quincenas">En dos quincenas (15 y fin de mes)</option>
               <option value="personalizado">En pagos mensuales</option>
+              <option value="fechas">Fechas personalizadas (elegir en el calendario)</option>
             </Select>
             {f.depTipo === 'personalizado' && (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -248,7 +259,25 @@ function Formulario({ editId, initial, editando, desde, initialObsEdited }: { ed
                 </Select>
               </div>
             )}
-            {f.depFechas.length > 0 && (
+            {f.depTipo === 'fechas' && (
+              <div className="space-y-3">
+                {f.depFechas.map((x, i) => (
+                  <div key={i} className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <Input label={`Pago ${i + 1}`} type="date" value={x} min={f.inicio}
+                        onChange={e => setFechasDep(prev => prev.map((v, j) => (j === i ? e.target.value : v)))} />
+                    </div>
+                    {f.depFechas.length > 1 && (
+                      <Button variant="secondary" aria-label={`Quitar pago ${i + 1}`} onClick={() => setFechasDep(prev => prev.filter((_, j) => j !== i))}>Quitar</Button>
+                    )}
+                  </div>
+                ))}
+                {f.depFechas.length < MAX_PAGOS_DEPOSITO && (
+                  <Button variant="secondary" onClick={() => setFechasDep(prev => [...prev, ''])}>+ Agregar fecha</Button>
+                )}
+              </div>
+            )}
+            {f.depTipo !== 'fechas' && f.depFechas.length > 0 && (
               <ul className="flex flex-wrap gap-2">{f.depFechas.map(x => <li key={x} className="rounded-lg bg-hover px-3 py-1 text-sm font-semibold">{fecha(x)}</li>)}</ul>
             )}
           </Seccion>
