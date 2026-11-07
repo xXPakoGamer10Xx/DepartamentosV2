@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, KeyRound, Landmark, UserRound } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../../../components/ui/Button'
 import { Card } from '../../../components/ui/Card'
@@ -28,16 +28,15 @@ export function General() {
   const c = cfg.data ?? {}
 
   const [nombre, setNombre] = useState(user?.nombre_completo ?? '')
-  const [arr, setArr] = useState({ nombre: '', direccion: '', rfc: '', telefono: '', url: '', gracia: '' })
-  const [record, setRecord] = useState<number[]>([1, 0])
+  // Los campos muestran lo guardado en la configuración hasta que el usuario los edita; desde entonces manda su copia.
+  const arrGuardado = { nombre: c.arrendador_nombre ?? '', direccion: c.arrendador_direccion ?? '', rfc: c.arrendador_rfc ?? '', telefono: c.arrendador_telefono ?? '', url: c.app_url ?? '', gracia: c.dias_gracia_retraso ?? '0' }
+  const [arrEditado, setArr] = useState<typeof arrGuardado | null>(null)
+  const arr = arrEditado ?? arrGuardado
+  const [recordEditado, setRecordEditado] = useState<number[] | null>(null)
+  const record = recordEditado ?? parseRecord(c.recordatorios_renta_dias)
+  const setRecord = (siguiente: number[] | ((r: number[]) => number[])) =>
+    setRecordEditado(typeof siguiente === 'function' ? siguiente(record) : siguiente)
   const [pwd, setPwd] = useState(false)
-
-  // Carga inicial de los campos cuando llega la configuración.
-  useEffect(() => {
-    if (!cfg.data) return
-    setArr({ nombre: c.arrendador_nombre ?? '', direccion: c.arrendador_direccion ?? '', rfc: c.arrendador_rfc ?? '', telefono: c.arrendador_telefono ?? '', url: c.app_url ?? '', gracia: c.dias_gracia_retraso ?? '0' })
-    setRecord(parseRecord(c.recordatorios_renta_dias))
-  }, [cfg.data]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const guardar = useMutation({
     mutationFn: (d: Record<string, string>) => api.updateConfig(d),

@@ -17,7 +17,7 @@ const SIDEBAR_KEY = 'nethrent_sidebar_collapsed'
 
 export function AppShell() {
   const { user, can, logout } = useAuth()
-  const [more, setMore] = useState(false)
+  const [moreEn, setMoreEn] = useState<string | null>(null)
   const dragSheet = useDragControls()
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem(SIDEBAR_KEY) === '1' } catch { return false }
@@ -42,7 +42,9 @@ export function AppShell() {
     return () => disconnectSSE()
   }, [])
 
-  useEffect(() => setMore(false), [pathname])
+  // La hoja "Más" está abierta solo en la ruta donde se abrió: al navegar se cierra sola.
+  const more = moreEn === pathname
+  const setMore = (abierta: boolean) => setMoreEn(abierta ? pathname : null)
 
   const items = useMemo(
     () => navFor(user!.rol).filter(i => (!i.adminOnly || user!.rol === 'admin') && (!i.permiso || can(i.permiso)) && (usaApp || !i.conApp)),

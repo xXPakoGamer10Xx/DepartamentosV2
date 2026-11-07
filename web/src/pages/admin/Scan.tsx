@@ -26,7 +26,9 @@ export default function Scan() {
   const [buscando, setBuscando] = useState(false)
   const [confirmando, setConfirmando] = useState(false)
   const [recienConfirmado, setRecienConfirmado] = useState(false)
-  const [camara, setCamara] = useState<'iniciando' | 'activa' | 'denegada' | 'no-soportada'>('iniciando')
+  const [camaraEstado, setCamara] = useState<'iniciando' | 'activa' | 'denegada' | 'no-soportada'>('iniciando')
+  const camaraSoportada = !!navigator.mediaDevices?.getUserMedia
+  const camara = camaraSoportada ? camaraEstado : 'no-soportada'
   const procesado = useRef(false)
 
   const procesar = useCallback(async (tok: string) => {
@@ -45,7 +47,7 @@ export default function Scan() {
   useEffect(() => {
     if (stage !== 'scan') return
     procesado.current = false
-    if (!navigator.mediaDevices?.getUserMedia) { setCamara('no-soportada'); return }
+    if (!camaraSoportada) return
     let stream: MediaStream | null = null
     let raf = 0
     let cancelled = false
@@ -86,7 +88,7 @@ export default function Scan() {
     })()
 
     return () => { cancelled = true; cancelAnimationFrame(raf); stream?.getTracks().forEach(t => t.stop()) }
-  }, [stage, procesar])
+  }, [stage, procesar, camaraSoportada])
 
   const reset = () => { setStage('scan'); setPago(null); setToken(''); setError(''); setManual(''); setRecienConfirmado(false); setCamara('iniciando') }
 

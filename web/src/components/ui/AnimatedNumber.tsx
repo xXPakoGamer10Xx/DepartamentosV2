@@ -19,12 +19,14 @@ export function AnimatedNumber({
   const fromRef = useRef(0)
   const currentRef = useRef(value)
 
+  const safeTarget = Number.isFinite(value) ? value : 0
+  // Con "reducir movimiento" (o sin duración) el número cambia directo, sin animar.
+  const sinAnimacion = (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) || duration <= 0
+
   useEffect(() => {
-    const safeTarget = Number.isFinite(value) ? value : 0
-    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    if (reduce || duration <= 0) {
+    if (sinAnimacion) {
       currentRef.current = safeTarget
-      setDisplay(safeTarget)
+      fromRef.current = safeTarget
       return
     }
 
@@ -32,8 +34,8 @@ export function AnimatedNumber({
     const delta = safeTarget - startVal
     if (Math.abs(delta) < 0.01) {
       currentRef.current = safeTarget
-      setDisplay(safeTarget)
-      return
+      const salto = requestAnimationFrame(() => setDisplay(safeTarget))
+      return () => cancelAnimationFrame(salto)
     }
 
     let raf = 0
@@ -58,7 +60,7 @@ export function AnimatedNumber({
       cancelAnimationFrame(raf)
       fromRef.current = currentRef.current
     }
-  }, [value, duration])
+  }, [safeTarget, sinAnimacion, duration])
 
-  return <span className={className}>{format(display)}</span>
+  return <span className={className}>{format(sinAnimacion ? safeTarget : display)}</span>
 }
