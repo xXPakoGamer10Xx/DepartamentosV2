@@ -144,8 +144,8 @@ Para trabajar localmente sin interferir con producción, el sistema cuenta con e
 # Backend: pruebas de integración contra un PostgreSQL 16 desechable (requiere Docker en marcha)
 dotnet test backend/VertexRent.Api.Tests
 
-# Web: tipos, lint y build
-cd web && npx tsc -b && npx oxlint && npm run build
+# Web: tipos, lint (sin advertencias), pruebas unitarias (Vitest) y build
+cd web && npx tsc -b && npx oxlint --deny-warnings && npm test && npm run build
 ```
 
 El CI (`.github/workflows/ci.yml`) corre lo mismo en cada pull request, y el despliegue solo se ejecuta si pasa.
