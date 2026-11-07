@@ -91,7 +91,7 @@ public sealed class NotificacionesBackupsTests(ApiFixture api)
     [Fact]
     public async Task Respaldos_listan_y_no_permiten_salirse_de_la_carpeta()
     {
-        var dueno = await api.RegisterAdmin(ApiFixture.PlatformEmail);
+        var dueno = await api.PlatformAdmin();
         Assert.Equal(HttpStatusCode.OK, (await dueno.Get("/api/backups")).Status);
         Assert.Equal(HttpStatusCode.NotFound, (await dueno.Get("/api/backups/no-existe.sql/descargar")).Status);
         Assert.Equal(HttpStatusCode.NotFound, (await dueno.Get("/api/backups/..%2F..%2F..%2Fetc%2Fpasswd/descargar")).Status);

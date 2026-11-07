@@ -9,12 +9,12 @@ public static class BackupsEndpoints
         var g = app.MapGroup("/api/backups").Auth().AdminOnly().PlatformAdmin();
 
         g.MapGet("/", async () =>
-            Api.Data((await Db.Query("SELECT * FROM backups ORDER BY created_at DESC LIMIT 50")).Rows));
+            Api.Data(await BackupsRepository.Recientes()));
 
         g.MapPost("/manual", async () =>
         {
             var (archivo, tamano) = await BackupService.RunBackup();
-            await Db.Query("UPDATE backups SET tipo = 'manual' WHERE archivo = $1", archivo);
+            await BackupsRepository.MarcarManual(archivo);
             return Api.Json(new Dictionary<string, object?>
             {
                 ["success"] = true, ["message"] = "Backup manual completado",

@@ -74,9 +74,7 @@ public static class BackupService
         await Dump(filepath);
 
         var size = new FileInfo(filepath).Length;
-        await Db.Query(
-            "INSERT INTO backups (archivo, tamano_bytes, tipo, estado) VALUES ($1, $2, 'automatico', 'completado')",
-            filename, size);
+        await BackupsRepository.Registrar(filename, size, "completado");
 
         // Limpiar backups con más de 30 días
         var cutoff = DateTime.Now.AddDays(-30);
@@ -119,9 +117,7 @@ public sealed class BackupCronService : BackgroundService
                 Console.Error.WriteLine($"❌ Error en backup automático: {ex.Message}");
                 try
                 {
-                    await Db.Query(
-                        "INSERT INTO backups (archivo, tamano_bytes, tipo, estado) VALUES ($1, 0, 'automatico', 'fallido')",
-                        $"backup_fallido_{DateTime.UtcNow:O}.sql");
+                    await BackupsRepository.Registrar($"backup_fallido_{DateTime.UtcNow:O}.sql", 0, "fallido");
                 }
                 catch { }
             }

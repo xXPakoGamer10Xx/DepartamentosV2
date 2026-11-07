@@ -105,7 +105,7 @@ public sealed class SeguridadTests(ApiFixture api)
         Assert.Equal(HttpStatusCode.Forbidden, (await comun.Get("/api/backups")).Status);
         Assert.Equal(HttpStatusCode.Forbidden, (await comun.Post("/api/backups/manual")).Status);
 
-        var dueno = await api.RegisterAdmin(ApiFixture.PlatformEmail);
+        var dueno = await api.PlatformAdmin();
         Assert.Equal(HttpStatusCode.OK, (await dueno.Get("/api/backups")).Status);
         var (_, me) = await dueno.Get("/api/auth/me");
         Assert.True(me!["data"]!["plataforma"]!.GetValue<bool>());

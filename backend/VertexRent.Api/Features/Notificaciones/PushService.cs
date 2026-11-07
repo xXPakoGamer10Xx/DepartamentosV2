@@ -16,8 +16,7 @@ public static class PushService
 
     public static async Task<List<WebSub>> GetUserWebPushSubscriptions(string usuarioId)
     {
-        var r = await Db.Query("SELECT endpoint, p256dh, auth FROM web_push_subscriptions WHERE usuario_id = $1", usuarioId);
-        return r.Rows.Select(x => new WebSub(x.S("endpoint")!, x.S("p256dh")!, x.S("auth")!)).ToList();
+        return (await NotificacionesRepository.Suscripciones(usuarioId)).Select(x => new WebSub(x.S("endpoint")!, x.S("p256dh")!, x.S("auth")!)).ToList();
     }
 
     public static async Task SendWebPush(List<WebSub> subs, string title, string body, object? data = null)
@@ -51,7 +50,7 @@ public static class PushService
             }
         }));
 
-        if (stale.Count > 0) await Db.Query("DELETE FROM web_push_subscriptions WHERE endpoint = ANY($1)", stale);
+        if (stale.Count > 0) await NotificacionesRepository.EliminarSuscripciones(stale);
     }
 
     public static async Task CreateAndSendNotification(string usuarioId, string title, string body, string tipo, string? dedupeKey = null)
@@ -59,8 +58,7 @@ public static class PushService
         try
         {
             // 1. Guardar en BD (panel histórico web)
-            await Db.Query("INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo, dedupe_key) VALUES ($1, $2, $3, $4, $5)",
-                usuarioId, title, body, tipo, dedupeKey);
+            await NotificacionesRepository.Insertar(usuarioId, title, body, tipo, dedupeKey);
 
             // 2. SSE si está conectado en web
             SseService.EmitToUser(usuarioId, "notification_new", new { title, mensaje = body, tipo });
@@ -81,13 +79,9 @@ public static class PushService
         try { await CreateAndSendNotification(adminId, title, body, tipo, dedupeKey); } catch (Exception ex) { Console.Error.WriteLine($"Error al notificar al admin: {ex.Message}"); }
         try
         {
-            var r = await Db.Query(
-                @"SELECT id FROM usuarios
-                  WHERE admin_id = $1 AND rol = 'cobrador' AND activo = TRUE
-                    AND permisos @> '[""notificaciones.pagos""]'::jsonb", adminId);
-            foreach (var row in r.Rows)
+            foreach (var id in await NotificacionesRepository.ColaboradoresDeCobranza(adminId))
             {
-                try { await CreateAndSendNotification(row.S("id")!, title, body, tipo, dedupeKey); } catch (Exception ex) { Console.Error.WriteLine($"Error al notificar a un colaborador: {ex.Message}"); }
+                try { await CreateAndSendNotification(id, title, body, tipo, dedupeKey); } catch (Exception ex) { Console.Error.WriteLine($"Error al notificar a un colaborador: {ex.Message}"); }
             }
         }
         catch (Exception ex)
