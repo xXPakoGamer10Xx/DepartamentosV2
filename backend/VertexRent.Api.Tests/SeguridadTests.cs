@@ -324,4 +324,16 @@ public sealed class SeguridadTests(ApiFixture api)
         Assert.Equal(HttpStatusCode.Created, st);
         await api.Login("Mi.Colab+x@gmail.com");
     }
+
+    [Fact]
+    public async Task Marcar_pagado_con_periodo_no_funciona_sobre_inquilinos_de_otro_propietario()
+    {
+        var (a, b, _, inqA, inqB) = await Escenario();
+        var periodo = DateTime.Today.AddMonths(-1).ToString("yyyy-MM");
+        Assert.Equal(HttpStatusCode.NotFound, (await a.Post($"/api/pagos/marcar-pagado/{inqB}", new { periodo })).Status);
+        Assert.Equal(HttpStatusCode.NotFound, (await b.Post($"/api/pagos/marcar-pagado/{inqA}", new { periodo })).Status);
+        // y el saldo del ajeno no cambió
+        Assert.Equal(HttpStatusCode.OK, (await b.Post($"/api/pagos/marcar-pagado/{inqB}", new { periodo })).Status);
+    }
 }
+

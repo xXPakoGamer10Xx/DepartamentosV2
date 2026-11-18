@@ -137,6 +137,7 @@ export default function Pagos() {
     mutationFn: (i: Inquilino) => api.marcarPagado(i.id),
     onSuccess: (res, i) => {
       invalidar()
+      if (res.data?.periodo && res.data.periodo !== periodoActual()) toast(`Se registró el pago de ${periodoLabel(res.data.periodo)}`, 'success')
       const pagoId = res.data?.id
       if (pagoId) {
         if (undoTimer.current) clearTimeout(undoTimer.current)

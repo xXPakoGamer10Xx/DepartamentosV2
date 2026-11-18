@@ -87,11 +87,24 @@ public static class PagosService
         return new(data);
     }
 
-    public static async Task<ResultadoPago> MarcarPagado(AuthUser u, string inquilinoId, bool soloRenta)
+    public static async Task<ResultadoPago> MarcarPagado(AuthUser u, string inquilinoId, bool soloRenta, string? periodoPedido = null)
     {
-        var periodo = Js.CurrentPeriodo();
         var inquilino = await InquilinosRepository.ActivoDelPropietario(inquilinoId, u.Id)
             ?? throw new AppError("Inquilino no encontrado o no autorizado", 404);
+
+        var actual = Js.CurrentPeriodo();
+        string periodo;
+        if (!string.IsNullOrEmpty(periodoPedido))
+        {
+            if (!Inputs.EsPeriodo(periodoPedido)) throw new AppError("El periodo debe tener el formato AAAA-MM", 400);
+            if (string.CompareOrdinal(periodoPedido, actual) > 0) throw new AppError("No se puede cobrar un periodo futuro", 400);
+            periodo = periodoPedido;
+        }
+        else
+        {
+            // Sin periodo: se paga primero el mes más antiguo con adeudo; si está al corriente, el mes actual.
+            periodo = (await MesesConAdeudo(inquilinoId, u)).FirstOrDefault()?.S("periodo") ?? actual;
+        }
 
         var pago = await PagosRepository.PagoDe(inquilinoId, periodo)
             ?? await PagosRepository.CrearPagoSiNoExiste(inquilinoId, periodo, inquilino.D("renta"), Metodo(inquilino));
@@ -104,7 +117,7 @@ public static class PagosService
             ? "Marcado como pagado (solo renta, cargos extra pendientes) por admin"
             : "Marcado como pagado completo por admin";
         var actualizado = (await SaldoService.AbonarSaldoPendiente(
-            pagoId, Metodo(inquilino), nota, u.Actor, soloRenta ? inquilino.D("renta") : null)).Pago;
+            pagoId, Metodo(inquilino), nota, u.Actor, soloRenta ? pago.D("monto") : null)).Pago;
         var data = ConDatos(actualizado, inquilino.S("nombre_completo"), inquilino.I("depto_numero"));
 
         var adminId = inquilino.S("admin_id");
@@ -113,6 +126,32 @@ public static class PagosService
                 $"Depto {inquilino.S("depto_numero")} — {inquilino.S("nombre_completo")} · {periodo}"));
         AvisarConfirmado(inquilino.S("usuario_id"), data, $"Tu pago de {periodo} fue confirmado por el administrador");
         return new(data);
+    }
+
+    /// <summary>Meses (del más antiguo al más reciente) con saldo de renta pendiente, incluido el actual.</summary>
+    static async Task<List<Row>> MesesConAdeudo(string inquilinoId, AuthUser u)
+    {
+        var datos = await InquilinosRepository.Accesible(inquilinoId, u, "id, renta, fecha_inicio::text AS fecha_inicio_txt")
+            ?? throw new AppError("No autorizado", 403);
+        return (await PagosRepository.SaldoDetalle(inquilinoId, datos.S("fecha_inicio_txt"), datos.S("renta")))
+            .Where(r => r.D("saldo") > 0.005m).ToList();
+    }
+
+    /// <summary>
+    /// Cambio de renta: el mes actual y los futuros sin pagar completo toman la renta nueva; los meses pasados con adeudo
+    /// conservan la que se pactó entonces (se les fija el monto anterior antes de cambiar nada).
+    /// </summary>
+    public static async Task AjustarRenta(AuthUser u, string inquilinoId, decimal rentaAnterior, decimal rentaNueva)
+    {
+        if (rentaAnterior == rentaNueva) return;
+        var actual = Js.CurrentPeriodo();
+        var datos = await InquilinosRepository.Accesible(inquilinoId, u, "id, fecha_inicio::text AS fecha_inicio_txt, metodo_pago")
+            ?? throw new AppError("No autorizado", 403);
+        var detalle = await PagosRepository.SaldoDetalle(inquilinoId, datos.S("fecha_inicio_txt"), rentaAnterior.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        foreach (var fila in detalle.Where(r => string.CompareOrdinal(r.S("periodo"), actual) < 0 && r.D("saldo") > 0.005m))
+            await PagosRepository.CrearPagoSiNoExiste(inquilinoId, fila.S("periodo")!, rentaAnterior, Metodo(datos));
+        foreach (var id in await PagosRepository.AjustarMontoDesde(inquilinoId, actual, rentaNueva))
+            await SaldoService.RecalcularPago(id);
     }
 
     public static async Task<Row> SubirComprobante(AuthUser u, string inquilinoId, string imagen)
@@ -182,9 +221,12 @@ public static class PagosService
 
     public static async Task<Dictionary<string, object?>> Estado(AuthUser u, string inquilinoId)
     {
-        if (await InquilinosRepository.Accesible(inquilinoId, u) == null) throw new AppError("No autorizado", 403);
+        var datos = await InquilinosRepository.Accesible(inquilinoId, u, "id, renta, fecha_pago, fecha_inicio::text AS fecha_inicio_txt")
+            ?? throw new AppError("No autorizado", 403);
         var periodo = Js.CurrentPeriodo();
         var pago = await PagosRepository.PagoDe(inquilinoId, periodo);
+        var atrasado = (await PagosRepository.SaldoDetalle(inquilinoId, datos.S("fecha_inicio_txt"), datos.S("renta")))
+            .FirstOrDefault(r => string.CompareOrdinal(r.S("periodo"), periodo) < 0 && r.D("saldo") > 0.005m);
         var cuotas = await PagosRepository.CuotasDelPeriodo(inquilinoId, periodo);
 
         var totalExtra = cuotas.Where(x => x.S("estado") == "pendiente").Sum(x => (double)x.D("monto"));
@@ -194,6 +236,7 @@ public static class PagosService
             ["data"] = pago, ["cuotas"] = cuotas, ["total_extra"] = totalExtra, ["total_abonado"] = totalAbonado,
             ["saldo_pendiente"] = pago != null ? Math.Max((double)pago.D("monto") - totalAbonado, 0) : 0,
             ["periodo"] = periodo,
+            ["atrasado"] = atrasado, ["dia_pago"] = Js.ParseInt(datos.S("fecha_pago")),
         };
     }
 

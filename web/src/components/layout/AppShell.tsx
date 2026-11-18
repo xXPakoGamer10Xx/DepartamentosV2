@@ -1,13 +1,14 @@
+import { useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { ChevronLeft, ChevronRight, LogOut, MoreHorizontal } from 'lucide-react'
 import { AnimatePresence, motion, useDragControls } from 'motion/react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
 import { iniciales } from '../../lib/format'
 import { useUsaApp } from '../../lib/usaApp'
 import { resubscribeIfGranted } from '../../lib/push'
-import { connectSSE, disconnectSSE } from '../../lib/sse'
+import { connectSSE, disconnectSSE, reconnectSSE, useSSE } from '../../lib/sse'
 import { navFor } from './nav'
 import { BrandLogo } from './BrandLogo'
 import { NotificationBell } from './NotificationBell'
@@ -42,6 +43,22 @@ export function AppShell() {
     void resubscribeIfGranted()
     return () => disconnectSSE()
   }, [])
+
+  // Tiempo real: cualquier cambio hecho desde otro dispositivo (o al reconectar) refresca lo que se está viendo.
+  const qc = useQueryClient()
+  const refrescar = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const refrescarTodo = useCallback(() => {
+    if (refrescar.current) clearTimeout(refrescar.current)
+    refrescar.current = setTimeout(() => void qc.invalidateQueries(), 300)
+  }, [qc])
+  useSSE('datos_cambiados', refrescarTodo)
+  useSSE('connected', refrescarTodo)
+  useEffect(() => {
+    const alVolver = () => { if (document.visibilityState === 'visible') { reconnectSSE(); refrescarTodo() } }
+    document.addEventListener('visibilitychange', alVolver)
+    window.addEventListener('online', alVolver)
+    return () => { document.removeEventListener('visibilitychange', alVolver); window.removeEventListener('online', alVolver) }
+  }, [refrescarTodo])
 
   // La hoja "Más" está abierta solo en la ruta donde se abrió: al navegar se cierra sola.
   const more = moreEn === pathname

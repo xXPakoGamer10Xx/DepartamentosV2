@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react'
 import { API_URL, ApiError, api } from './api'
 
 // Eventos en vivo del backend (Server-Sent Events). Una sola conexión compartida por toda la app.
-export type SseEvent = 'ticket_new' | 'ticket_updated' | 'payment_confirmed' | 'payment_rejected' | 'comprobante_subido' | 'notification_new'
-const EVENTS: SseEvent[] = ['ticket_new', 'ticket_updated', 'payment_confirmed', 'payment_rejected', 'comprobante_subido', 'notification_new']
+export type SseEvent = 'ticket_new' | 'ticket_updated' | 'payment_confirmed' | 'payment_rejected' | 'comprobante_subido' | 'notification_new' | 'datos_cambiados' | 'connected'
+const EVENTS: SseEvent[] = ['ticket_new', 'ticket_updated', 'payment_confirmed', 'payment_rejected', 'comprobante_subido', 'notification_new', 'datos_cambiados', 'connected']
 
 type Listener = (data: any) => void // eslint-disable-line @typescript-eslint/no-explicit-any
 const listeners = new Map<string, Set<Listener>>()
@@ -40,6 +40,11 @@ async function open() {
 export function connectSSE() {
   wanted = true
   void open()
+}
+
+/** Si la conexión se cayó (p. ej. el celular la cortó en segundo plano), la reabre. */
+export function reconnectSSE() {
+  if (wanted && !es && !retry) void open()
 }
 
 export function disconnectSSE() {

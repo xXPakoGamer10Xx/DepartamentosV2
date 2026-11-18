@@ -42,6 +42,12 @@ internal static class PagosRepository
     public static async Task<Row?> RefrescarMonto(string pagoId, decimal monto) =>
         (await Db.Query("UPDATE pagos SET monto = $1 WHERE id = $2 AND confirmado = false RETURNING *", monto, pagoId)).First;
 
+    /// <summary>Pagos sin confirmar de ese periodo en adelante pasan a la renta nueva. Devuelve sus ids para recalcularlos.</summary>
+    public static async Task<List<string>> AjustarMontoDesde(string inquilinoId, string periodoDesde, decimal monto) =>
+        (await Db.Query(
+            "UPDATE pagos SET monto = $3 WHERE inquilino_id = $1 AND periodo >= $2 AND confirmado = false RETURNING id",
+            inquilinoId, periodoDesde, monto)).Rows.Select(r => r.S("id")!).ToList();
+
     public static async Task<Row?> InfoPorToken(string token, string adminId) =>
         (await Db.Query(
             @"SELECT p.id, p.periodo, p.monto, p.confirmado, i.nombre_completo, i.depto_numero, i.renta
@@ -216,7 +222,7 @@ internal static class PagosRepository
   + COALESCE((SELECT c.valor FROM configuracion c
               WHERE c.admin_id = i.admin_id AND c.clave = 'dias_gracia_retraso')::int, 0)
 )";
-    const string DeudaMes = "i.renta - COALESCE(ab.total, 0)"; // solo renta; cuotas extra van aparte (deuda_cuotas_extra)
+    const string DeudaMes = "COALESCE(ab.monto, i.renta) - COALESCE(ab.total, 0)"; // solo renta; cuotas extra van aparte (deuda_cuotas_extra)
     const string DeudaVencida = "COALESCE(SUM(GREATEST(CASE WHEN " + MesVencido + " THEN " + DeudaMes + " ELSE 0 END, 0)), 0)";
     const string DeudaTotal = "COALESCE(SUM(GREATEST(" + DeudaMes + ", 0)), 0)";
     const string PeriodoVencido = "MIN(CASE WHEN " + MesVencido + " AND " + DeudaMes + " > 0.5 THEN to_char(gs, 'YYYY-MM') END)";
@@ -227,7 +233,7 @@ CROSS JOIN LATERAL generate_series(
   date_trunc('month', i.fecha_inicio), date_trunc('month', CURRENT_DATE), interval '1 month'
 ) AS gs
 LEFT JOIN LATERAL (
-  SELECT SUM(a.monto) AS total FROM pagos p JOIN abonos_pago a ON a.pago_id = p.id
+  SELECT MAX(p.monto) AS monto, SUM(a.monto) AS total FROM pagos p LEFT JOIN abonos_pago a ON a.pago_id = p.id
   WHERE p.inquilino_id = i.id AND p.periodo = to_char(gs, 'YYYY-MM')
 ) ab ON true";
 
@@ -266,14 +272,14 @@ GREATEST(MAX(i.deposito) - COALESCE((SELECT SUM(monto) FROM abonos_deposito WHER
                 ) AS gs
               ),
               abonado AS (
-                SELECT p.periodo, COALESCE(SUM(a.monto), 0) AS total
+                SELECT p.periodo, p.monto, COALESCE(SUM(a.monto), 0) AS total
                 FROM pagos p LEFT JOIN abonos_pago a ON a.pago_id = p.id
-                WHERE p.inquilino_id = $1 GROUP BY p.periodo
+                WHERE p.inquilino_id = $1 GROUP BY p.periodo, p.monto
               )
               SELECT pe.periodo,
-                     $3::numeric AS monto_esperado,
+                     COALESCE(ab.monto, $3::numeric) AS monto_esperado,
                      COALESCE(ab.total, 0) AS abonado,
-                     GREATEST($3::numeric - COALESCE(ab.total, 0), 0) AS saldo
+                     GREATEST(COALESCE(ab.monto, $3::numeric) - COALESCE(ab.total, 0), 0) AS saldo
               FROM periodos pe
               LEFT JOIN abonado ab ON ab.periodo = pe.periodo
               ORDER BY pe.periodo", inquilinoId, fechaInicio, renta)).Rows;
