@@ -15,7 +15,16 @@ const queryClient = new QueryClient({
 })
 
 // Service worker (PWA + push). `autoUpdate`: se actualiza solo al detectar una versión nueva.
-registerSW({ immediate: true })
+// La app instalada busca versiones nuevas cada minuto y al volver al primer plano, sin tener que reinstalar ni borrar datos.
+registerSW({
+  immediate: true,
+  onRegisteredSW(_url, reg) {
+    if (!reg) return
+    const buscar = () => { void reg.update().catch(() => { /* sin red */ }) }
+    setInterval(buscar, 60_000)
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') buscar() })
+  },
+})
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -15,11 +15,14 @@ public sealed class PagosTests(ApiFixture api)
         _ => 0m,
     };
 
-    async Task<(ApiFixture.Session A, string Inq)> Nuevo(decimal renta = 5000m)
+    async Task<(ApiFixture.Session A, string Inq)> Nuevo(decimal renta = 5000m, int mesesAtras = 1)
     {
         var a = await api.RegisterAdmin();
-        return (a, await api.CreateInquilino(a, 1, renta));
+        return (a, await api.CreateInquilino(a, 1, renta, mesesAtras));
     }
+
+    static string Periodo(int mesesAtras) => DateTime.Today.AddMonths(-mesesAtras).ToString("yyyy-MM");
+    static JsonNode? Fila(JsonNode saldo, string periodo) => saldo["data"]!["detalle"]!.AsArray().FirstOrDefault(r => r!["periodo"]!.GetValue<string>() == periodo);
 
     static async Task<JsonNode> Estado(ApiFixture.Session a, string inq) => (await a.Get($"/api/pagos/estado/{inq}")).Body!;
 
@@ -62,7 +65,7 @@ public sealed class PagosTests(ApiFixture api)
     [Fact]
     public async Task Marcar_pagado_completo_cobra_todo_el_saldo()
     {
-        var (a, inq) = await Nuevo();
+        var (a, inq) = await Nuevo(mesesAtras: 0);
         await a.Post("/api/pagos/abono", new { inquilino_id = inq, monto = 2000 });
         var (st, b) = await a.Post($"/api/pagos/marcar-pagado/{inq}");
         Assert.Equal(HttpStatusCode.OK, st);
@@ -77,7 +80,7 @@ public sealed class PagosTests(ApiFixture api)
     [Fact]
     public async Task Las_cuotas_extra_se_cobran_aparte_de_la_renta()
     {
-        var (a, inq) = await Nuevo();
+        var (a, inq) = await Nuevo(mesesAtras: 0);
         var (sc, _) = await a.Post("/api/cuotas", new { inquilino_id = inq, concepto = "Agua", monto = 300 });
         Assert.Equal(HttpStatusCode.Created, sc);
         var e = await Estado(a, inq);
@@ -92,7 +95,7 @@ public sealed class PagosTests(ApiFixture api)
     [Fact]
     public async Task Cancelar_un_pago_reciente_lo_elimina()
     {
-        var (a, inq) = await Nuevo();
+        var (a, inq) = await Nuevo(mesesAtras: 0);
         var (_, b) = await a.Post($"/api/pagos/marcar-pagado/{inq}");
         var pagoId = b!["data"]!["id"]!.GetValue<string>();
         Assert.Equal(HttpStatusCode.OK, (await a.Delete($"/api/pagos/{pagoId}/cancelar")).Status);
@@ -207,5 +210,70 @@ public sealed class PagosTests(ApiFixture api)
         await a.Post("/api/pagos/abono", new { inquilino_id = inq, monto = 10000, aplicar_a_deuda_antigua = true });
         var (st, _) = await a.Post("/api/pagos/abono", new { inquilino_id = inq, monto = 1, aplicar_a_deuda_antigua = true });
         Assert.Equal(HttpStatusCode.BadRequest, st);
+    }
+
+    // ── Cambio de renta, atrasos y "marcar pagado" ───────────────────────────
+    [Fact]
+    public async Task Bajar_la_renta_actualiza_el_saldo_del_mes_en_curso()
+    {
+        var (a, inq) = await Nuevo(4000m, mesesAtras: 0);
+        await a.Post("/api/pagos/abono", new { inquilino_id = inq, monto = 2500 });
+        Assert.Equal(1500m, D((await Estado(a, inq))["saldo_pendiente"]));
+
+        Assert.Equal(HttpStatusCode.OK, (await a.Put($"/api/inquilinos/{inq}", new { renta = 3500 })).Status);
+        var e = await Estado(a, inq);
+        Assert.Equal(3500m, D(e["data"]!["monto"]));
+        Assert.Equal(1000m, D(e["saldo_pendiente"]));
+
+        // si lo abonado ya cubre la renta nueva, el mes queda pagado
+        await a.Put($"/api/inquilinos/{inq}", new { renta = 2500 });
+        Assert.True((await Estado(a, inq))["data"]!["confirmado"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task El_cambio_de_renta_no_toca_los_meses_atrasados()
+    {
+        var (a, inq) = await Nuevo(4000m); // debe el mes pasado y el actual
+        await a.Post("/api/pagos/abono", new { inquilino_id = inq, monto = 1000, periodo = Periodo(1) });
+        await a.Put($"/api/inquilinos/{inq}", new { renta = 3500 });
+
+        var saldo = (await a.Get($"/api/pagos/saldo/{inq}")).Body!;
+        Assert.Equal(3000m, D(Fila(saldo, Periodo(1))!["saldo"])); // 4000 - 1000: conserva la renta de entonces
+        Assert.Equal(3500m, D(Fila(saldo, Periodo(0))!["saldo"]));
+        Assert.Equal(Periodo(1), (await Estado(a, inq))["atrasado"]!["periodo"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Marcar_pagado_llena_primero_el_mes_atrasado_y_no_el_actual()
+    {
+        var (a, inq) = await Nuevo(3500m);
+        await a.Post("/api/pagos/abono", new { inquilino_id = inq, monto = 2000, periodo = Periodo(1) });
+
+        var (st, b) = await a.Post($"/api/pagos/marcar-pagado/{inq}");
+        Assert.Equal(HttpStatusCode.OK, st);
+        Assert.Equal(Periodo(1), b!["data"]!["periodo"]!.GetValue<string>());
+        Assert.True(b["data"]!["confirmado"]!.GetValue<bool>());
+
+        var e = await Estado(a, inq);
+        Assert.Null(e["atrasado"]);
+        Assert.Null(e["data"]); // el mes actual no se tocó
+        var saldo = (await a.Get($"/api/pagos/saldo/{inq}")).Body!;
+        Assert.Equal(0m, D(Fila(saldo, Periodo(1))!["saldo"]));
+        Assert.Equal(3500m, D(Fila(saldo, Periodo(0))!["saldo"]));
+
+        // ahora sí, sin atrasos, marca el mes actual
+        var (_, b2) = await a.Post($"/api/pagos/marcar-pagado/{inq}");
+        Assert.Equal(Periodo(0), b2!["data"]!["periodo"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Marcar_pagado_acepta_un_periodo_y_rechaza_futuros_o_invalidos()
+    {
+        var (a, inq) = await Nuevo();
+        var (st, b) = await a.Post($"/api/pagos/marcar-pagado/{inq}", new { periodo = Periodo(0) });
+        Assert.Equal(HttpStatusCode.OK, st);
+        Assert.Equal(Periodo(0), b!["data"]!["periodo"]!.GetValue<string>());
+        Assert.Equal(HttpStatusCode.BadRequest, (await a.Post($"/api/pagos/marcar-pagado/{inq}", new { periodo = DateTime.Today.AddMonths(2).ToString("yyyy-MM") })).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await a.Post($"/api/pagos/marcar-pagado/{inq}", new { periodo = "no-es-periodo" })).Status);
     }
 }

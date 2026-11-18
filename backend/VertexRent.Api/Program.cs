@@ -173,6 +173,19 @@ app.Use(async (ctx, next) =>
     await next();
 });
 
+// Tiempo real: tras cualquier cambio exitoso (POST/PUT/PATCH/DELETE) se avisa a todos los dispositivos del equipo
+// para que refresquen sus datos al instante. El aviso no lleva datos: cada cliente vuelve a pedir lo que muestra.
+app.Use(async (ctx, next) =>
+{
+    await next();
+    var path = ctx.Request.Path;
+    if (!path.StartsWithSegments("/api") || HttpMethods.IsGet(ctx.Request.Method) || HttpMethods.IsHead(ctx.Request.Method)
+        || HttpMethods.IsOptions(ctx.Request.Method) || ctx.Response.StatusCode >= 400
+        || path.StartsWithSegments("/api/events") || path.StartsWithSegments("/api/auth") || path.StartsWithSegments("/api/push")) return;
+    if (ctx.Items["__user"] is AuthUser { Rol: "admin" or "cobrador" } u && !string.IsNullOrEmpty(u.Id))
+        SseService.EmitToTeam(u.Id, "datos_cambiados", new { });
+});
+
 // Rate limiting general sobre /api (los limitadores estrictos van por ruta).
 app.Use(async (ctx, next) =>
 {
@@ -226,11 +239,22 @@ if (!Directory.Exists(publicPath)) publicPath = Path.Combine(Directory.GetCurren
 if (Directory.Exists(publicPath))
 {
     var fp = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(publicPath);
-    app.UseStaticFiles(new StaticFileOptions { FileProvider = fp, ServeUnknownFileTypes = true });
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = fp, ServeUnknownFileTypes = true,
+        // El shell (HTML, manifiesto) se revalida siempre para que la PWA vea las versiones nuevas; los assets llevan hash.
+        OnPrepareResponse = r =>
+        {
+            var n = r.File.Name;
+            r.Context.Response.Headers.CacheControl = n.EndsWith(".html") || n.EndsWith(".webmanifest")
+                ? "no-cache" : r.Context.Request.Path.StartsWithSegments("/assets") ? "public, max-age=31536000, immutable" : "no-cache";
+        },
+    });
     app.MapFallback(async (HttpContext c) =>
     {
         if (c.Request.Method != "GET") { await NotFoundHtml(c); return; }
         c.Response.ContentType = "text/html; charset=utf-8";
+        c.Response.Headers.CacheControl = "no-cache";
         await c.Response.SendFileAsync(fp.GetFileInfo("index.html"));
     });
 }

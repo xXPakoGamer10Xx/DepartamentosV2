@@ -25,7 +25,13 @@ public static class EventsEndpoints
             c.Response.Headers["X-Accel-Buffering"] = "no";
             await c.Response.Body.FlushAsync();
 
-            var client = new SseClient { Res = c.Response };
+            var owner = u.Rol switch
+            {
+                "admin" => u.Id,
+                "cobrador" => (await Db.Query("SELECT admin_id FROM usuarios WHERE id = $1", u.Id)).First?.S("admin_id"),
+                _ => (await Db.Query("SELECT admin_id FROM inquilinos WHERE usuario_id = $1 AND estado = 'activo' LIMIT 1", u.Id)).First?.S("admin_id"),
+            };
+            var client = new SseClient { Res = c.Response, OwnerId = owner };
             SseService.Add(u.Id, u.Rol, client);
             try
             {

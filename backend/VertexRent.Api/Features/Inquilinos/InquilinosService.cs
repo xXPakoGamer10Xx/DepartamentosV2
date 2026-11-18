@@ -100,6 +100,10 @@ public static class InquilinosService
             EmailContacto: TextoUpd(b, "email_contacto", cur), FiadorDomicilio: TextoUpd(b, "fiador_domicilio", cur),
             Estado: b["estado"] is null ? cur.S("estado") : b["estado"]));
 
+        // Si cambió la renta, el mes actual y los siguientes sin pagar toman la nueva (los atrasados conservan la anterior).
+        if (cur.D("renta") != actualizado.D("renta"))
+            await PagosService.AjustarRenta(u, id, cur.D("renta"), actualizado.D("renta"));
+
         // El departamento queda libre u ocupado según quién lo habite ahora.
         var deptoAnterior = cur.S("depto_numero"); var deptoNuevo = actualizado.S("depto_numero"); var estadoNuevo = actualizado.S("estado");
         if (deptoAnterior != deptoNuevo || cur.S("estado") != estadoNuevo)

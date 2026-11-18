@@ -66,7 +66,7 @@ export default function PagoDetalle() {
     onError: (e: unknown) => toast(errMsg(e, 'No se pudo completar la acción'), 'error'),
   })
 
-  const marcar = useMutation({ ...run(() => api.marcarPagado(id, undefined), 'Pago registrado'), mutationFn: (soloRenta?: boolean) => api.marcarPagado(id, soloRenta) })
+  const marcar = useMutation({ ...run(() => api.marcarPagado(id, undefined), 'Pago registrado'), mutationFn: (periodo?: string) => api.marcarPagado(id, false, periodo) })
   const confirmar = useMutation(run(() => api.confirmarPagoAdmin(pago!.id), 'Pago confirmado'))
   const cancelarPago = useMutation({ mutationFn: () => api.cancelarPago(pago!.id), onSuccess: () => { setCancelar(false); toast('Pago cancelado', 'success'); refresh() } })
   const eliminarAbono = useMutation({ mutationFn: (a: string) => api.eliminarAbono(a), onSuccess: () => { toast('Abono eliminado', 'success'); refresh() }, onError: (e) => toast(errMsg(e, 'No se pudo eliminar'), 'error') })
@@ -85,6 +85,8 @@ export default function PagoDetalle() {
   const totalAbonado = estadoQ.data?.total_abonado ?? 0
   const saldoPend = estadoQ.data?.saldo_pendiente ?? 0
   const monto = num(pago?.monto)
+  const atrasado = estadoQ.data?.atrasado ?? null
+  const diaPago = estadoQ.data?.dia_pago ?? null
   const parcial = !pago?.confirmado && totalAbonado > 0
   const esTransf = inq.metodo_pago === 'transferencia' || inq.metodo_pago === 'ambos'
   const usaQr = cfg.usa_qr_inquilinos !== 'false'
@@ -113,6 +115,26 @@ export default function PagoDetalle() {
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className="space-y-5">
+          {/* Mes anterior con adeudo: "Marcar pagado" siempre llena primero el mes más antiguo que se debe */}
+          {atrasado && (
+            <Card className="space-y-3 border-danger/40 bg-danger-soft">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="size-9 text-danger" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold uppercase tracking-wide text-danger">{periodoLabel(atrasado.periodo)} · atrasado</p>
+                  <p className="text-lg font-extrabold">Debe {money(atrasado.saldo)}</p>
+                  {num(atrasado.abonado) > 0 && <p className="text-xs text-fg-2">Abonó {money(atrasado.abonado)} de {money(atrasado.monto_esperado)}</p>}
+                </div>
+              </div>
+              {puedeMarcar && (
+                <div className="flex flex-wrap gap-2">
+                  <Button loading={marcar.isPending} icon={<Banknote className="size-4" />} onClick={() => marcar.mutate(atrasado.periodo)}>Marcar {periodoLabel(atrasado.periodo).split(' ')[0].toLowerCase()} pagado</Button>
+                  <Button variant="secondary" icon={<HandCoins className="size-4" />} onClick={() => setAbonoModal({ tipo: 'renta', periodo: atrasado.periodo, saldo: num(atrasado.saldo) })}>Abonar</Button>
+                </div>
+              )}
+            </Card>
+          )}
+
           {/* Estado del periodo */}
           <Card className={`space-y-4 ${pago?.confirmado ? 'border-success/30 bg-success-soft' : ''}`}>
             <div className="flex items-center gap-3">
@@ -125,6 +147,7 @@ export default function PagoDetalle() {
               <p className="text-2xl font-extrabold">{money(pago && !pago.confirmado && totalAbonado > 0 ? saldoPend : pago ? monto : num(inq.renta))}</p>
             </div>
 
+            {diaPago && !pago?.confirmado && <p className="text-xs text-fg-2">Vence el día {diaPago}</p>}
             {parcial && (
               <div>
                 <ProgressBar value={(totalAbonado / Math.max(monto, 1)) * 100} />
@@ -136,7 +159,7 @@ export default function PagoDetalle() {
 
             {puedeMarcar && (
               <div className="flex flex-wrap gap-2">
-                {!pago?.confirmado && <Button loading={marcar.isPending} icon={<Banknote className="size-4" />} onClick={() => marcar.mutate(false)}>Marcar renta pagada</Button>}
+                {!pago?.confirmado && !atrasado && <Button loading={marcar.isPending} icon={<Banknote className="size-4" />} onClick={() => marcar.mutate(undefined)}>Marcar renta pagada</Button>}
                 {!pago?.confirmado && <Button variant="secondary" icon={<HandCoins className="size-4" />} onClick={() => setAbonoModal({ tipo: 'renta' })}>Registrar abono</Button>}
                 {pago?.confirmado && puedeCancelar(est) && <Button variant="ghost" className="text-danger" icon={<Undo2 className="size-4" />} onClick={() => { cancelarPago.reset(); setCancelar(true) }}>Cancelar pago</Button>}
               </div>

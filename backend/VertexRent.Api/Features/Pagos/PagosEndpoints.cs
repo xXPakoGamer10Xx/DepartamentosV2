@@ -56,7 +56,8 @@ public static class PagosEndpoints
     {
         var b = await Api.Body(c);
         var soloRenta = b["soloRenta"] is JsonValue v && v.TryGetValue<bool>(out var s) && s;
-        return Resultado(await PagosService.MarcarPagado(c.Me(), Api.Route(c, "inquilino_id"), soloRenta));
+        return Resultado(await PagosService.MarcarPagado(c.Me(), Api.Route(c, "inquilino_id"), soloRenta,
+            b["periodo"] is JsonValue pv && pv.TryGetValue<string>(out var per) ? per : null));
     }
 
     static async Task<IResult> Rechazar(HttpContext c)

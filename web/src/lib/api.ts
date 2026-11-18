@@ -164,14 +164,14 @@ export const api = {
   // ── Pagos ───────────────────────────────────────────────────────────────
   generarQr: (inquilinoId: string) => request<Pago & { renta_base: number; total_extra: number; cuotas: { id: string; concepto: string; monto: Numeric }[]; inquilino: { nombre_completo: string; depto_numero: number } }>('POST', `/pagos/generar-qr/${inquilinoId}`),
   getEstadoPago: (inquilinoId: string) =>
-    request<Pago | null, { cuotas: CuotaExtra[]; total_extra: number; total_abonado: number; saldo_pendiente: number; periodo: string }>('GET', `/pagos/estado/${inquilinoId}`),
+    request<Pago | null, { cuotas: CuotaExtra[]; total_extra: number; total_abonado: number; saldo_pendiente: number; periodo: string; dia_pago: number | null; atrasado: { periodo: string; monto_esperado: Numeric; abonado: Numeric; saldo: Numeric } | null }>('GET', `/pagos/estado/${inquilinoId}`),
   getEstadosActuales: () =>
     request<{ inquilino_id: string; pago_id: string | null; monto: Numeric | null; confirmado: boolean; confirmado_en: string | null; rechazado: boolean; tiene_comprobante: boolean; total_abonado: Numeric }[]>('GET', '/pagos/estados-actuales'),
   getPagoByToken: (token: string) => request<Pago & { nombre_completo: string; depto_numero: number; renta: Numeric }>('GET', `/pagos/info/${token}`),
   confirmarPago: (token: string) => request<Pago, { yaConfirmado?: boolean }>('POST', `/pagos/confirmar/${token}`, {}),
   subirComprobante: (inquilinoId: string, comprobante_url: string) => request<Pago>('POST', `/pagos/comprobante/${inquilinoId}`, { comprobante_url }),
   confirmarPagoAdmin: (pagoId: string) => request<Pago, { yaConfirmado?: boolean }>('POST', `/pagos/confirmar-admin/${pagoId}`),
-  marcarPagado: (inquilinoId: string, soloRenta?: boolean) => request<Pago, { yaConfirmado?: boolean }>('POST', `/pagos/marcar-pagado/${inquilinoId}`, soloRenta ? { soloRenta: true } : {}),
+  marcarPagado: (inquilinoId: string, soloRenta?: boolean, periodo?: string) => request<Pago, { yaConfirmado?: boolean }>('POST', `/pagos/marcar-pagado/${inquilinoId}`, { ...(soloRenta ? { soloRenta: true } : {}), ...(periodo ? { periodo } : {}) }),
   /** Deshace un pago registrado por error (solo dentro de las 24 h siguientes). */
   cancelarPago: (pagoId: string) => request<void>('DELETE', `/pagos/${pagoId}/cancelar`),
   rechazarPago: (pagoId: string, comentario?: string) => request<Pago>('POST', `/pagos/rechazar-admin/${pagoId}`, { comentario: comentario || '' }),

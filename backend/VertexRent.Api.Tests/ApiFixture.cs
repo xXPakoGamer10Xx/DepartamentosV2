@@ -137,14 +137,14 @@ public sealed class ApiFixture : IAsyncLifetime
     }
 
     /// <summary>Departamento + inquilino activo del admin. Devuelve el id del inquilino.</summary>
-    public async Task<string> CreateInquilino(Session admin, int depto, decimal renta = 5000m)
+    public async Task<string> CreateInquilino(Session admin, int depto, decimal renta = 5000m, int mesesAtras = 1)
     {
         var (s1, _) = await admin.Post("/api/departamentos", new { numero = depto });
         Assert.Equal(HttpStatusCode.Created, s1);
         var (s2, body) = await admin.Post("/api/inquilinos", new
         {
             nombre_completo = "Inquilino Prueba", depto_numero = depto, renta,
-            fecha_inicio = DateTime.Today.AddMonths(-1).ToString("yyyy-MM-dd"),
+            fecha_inicio = DateTime.Today.AddMonths(-mesesAtras).ToString("yyyy-MM-dd"),
             fecha_termino = DateTime.Today.AddMonths(11).ToString("yyyy-MM-dd"),
             fecha_pago = "5",
         });

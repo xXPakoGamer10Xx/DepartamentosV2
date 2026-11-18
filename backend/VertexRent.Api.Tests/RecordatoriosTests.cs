@@ -103,7 +103,7 @@ public sealed class RecordatoriosTests(ApiFixture api)
     {
         var (a, _, id) = await Escenario(Base("1"));
         await a.Put($"/api/pagos/promesa/inquilino/{id}", new { fecha_promesa = Hoy });
-        await a.Post($"/api/pagos/marcar-pagado/{id}");
+        await a.Post($"/api/pagos/marcar-pagado/{id}", new { periodo = DateTime.Today.ToString("yyyy-MM") });
         await SchedulerService.CheckPromesaPagoReminders();
         Assert.DoesNotContain(await Notas(a), n => n["tipo"]!.GetValue<string>() == "promesa");
     }
