@@ -67,13 +67,13 @@ export default function InquilinoDetalle() {
     <div className="space-y-6">
       <PageHeader title={nombreVisible(inq.nombre_completo)} back="/inquilinos"
         subtitle={<Link to={`/departamentos/${inq.depto_numero}`} className="font-semibold text-primary hover:underline">Departamento {inq.depto_numero}</Link>}
-        actions={<>
-          <Badge tone={chip.tone}>{chip.label}</Badge>
-          {can('contratos') && activo && <Button icon={<FilePlus2 className="size-4" />} className="h-10 px-4" onClick={() => setGenerar(true)}>Generar contrato</Button>}
-          {puedeEditar && activo && <Link to={`/inquilinos/${inq.id}/editar`}><Button variant="secondary" icon={<Pencil className="size-4" />} className="h-10 px-4">Editar</Button></Link>}
-          {puedeEditar && activo && <Button variant="danger" icon={<UserMinus className="size-4" />} className="h-10 px-4" onClick={() => { darDeBaja.reset(); setBaja(true) }}>Dar de baja</Button>}
+        actions={<div className="grid w-full grid-cols-2 items-center gap-2 sm:flex sm:w-auto sm:flex-wrap">
+          <div className="col-span-2 sm:col-span-1"><Badge tone={chip.tone}>{chip.label}</Badge></div>
+          {can('contratos') && activo && <Button icon={<FilePlus2 className="size-4" />} className="col-span-2 h-10 px-4" onClick={() => setGenerar(true)}>Generar contrato</Button>}
+          {puedeEditar && activo && <Link to={`/inquilinos/${inq.id}/editar`} className="block"><Button variant="secondary" icon={<Pencil className="size-4" />} className="h-10 w-full px-4 sm:w-auto">Editar</Button></Link>}
+          {puedeEditar && activo && <Button variant="danger" icon={<UserMinus className="size-4" />} className="h-10 w-full px-4 sm:w-auto" onClick={() => { darDeBaja.reset(); setBaja(true) }}>Dar de baja</Button>}
           {puedeEditar && !activo && <Link to={`/inquilinos/nuevo?desde=${inq.id}`}><Button className="h-10 px-4">Nuevo contrato</Button></Link>}
-        </>} />
+        </div>} />
 
       <Card className="flex items-center gap-4">
         <span className="grid size-16 shrink-0 place-items-center rounded-2xl bg-primary text-xl font-extrabold text-white shadow-lg shadow-primary/30">{iniciales(inq.nombre_completo)}</span>
