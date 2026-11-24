@@ -25,6 +25,33 @@ import { nombreVisible } from '../../../lib/nombre'
 
 type Tab = 'contratos' | 'plantillas'
 type Filtro = 'todos' | 'vigentes' | 'porvencer' | 'vencidos'
+type Orden = 'vence-asc' | 'vence-desc' | 'nombre' | 'depto'
+
+const ORDENES: { value: Orden; label: string }[] = [
+  { value: 'vence-asc', label: 'Vencimiento: más próximo primero' },
+  { value: 'vence-desc', label: 'Vencimiento: más lejano primero' },
+  { value: 'nombre', label: 'Nombre (A-Z)' },
+  { value: 'depto', label: 'Número de depto' },
+]
+const FILTROS: Filtro[] = ['todos', 'vigentes', 'porvencer', 'vencidos']
+
+/** Estado que se recuerda entre visitas (filtro y orden de la lista). */
+function usePreferencia<T extends string>(key: string, valores: readonly T[], inicial: T) {
+  const [v, setV] = useState<T>(() => {
+    try { const g = localStorage.getItem(key); return valores.includes(g as T) ? (g as T) : inicial } catch { return inicial }
+  })
+  const set = (n: T) => { setV(n); try { localStorage.setItem(key, n) } catch { /* ignore */ } }
+  return [v, set] as const
+}
+
+function comparar(o: Orden, a: ResumenContrato, b: ResumenContrato) {
+  switch (o) {
+    case 'vence-asc': return a.fecha_termino.localeCompare(b.fecha_termino)
+    case 'vence-desc': return b.fecha_termino.localeCompare(a.fecha_termino)
+    case 'nombre': return a.nombre_completo.localeCompare(b.nombre_completo, 'es')
+    case 'depto': return a.depto_numero - b.depto_numero
+  }
+}
 
 function estadoVigencia(i: Pick<ResumenContrato, 'fecha_termino'>): Exclude<Filtro, 'todos'> {
   const v = vencimiento(i.fecha_termino)
@@ -56,7 +83,8 @@ export default function Contratos() {
 // ── Contratos por inquilino ─────────────────────────────────────────────────────────────────
 function ListaContratos() {
   const toast = useToast()
-  const [filtro, setFiltro] = useState<Filtro>('todos')
+  const [filtro, setFiltro] = usePreferencia<Filtro>('contratos.filtro', FILTROS, 'todos')
+  const [orden, setOrden] = usePreferencia<Orden>('contratos.orden', ORDENES.map(o => o.value), 'vence-asc')
   const [search, setSearch] = useState('')
   const [generar, setGenerar] = useState<string | null>(null)
   const qc = useQueryClient()
@@ -80,7 +108,8 @@ function ListaContratos() {
     const s = search.trim().toLowerCase()
     return data.filter(i => (filtro === 'todos' || estadoVigencia(i) === filtro)
       && (!s || i.nombre_completo.toLowerCase().includes(s) || String(i.depto_numero).includes(s)))
-  }, [data, filtro, search])
+      .sort((a, b) => comparar(orden, a, b))
+  }, [data, filtro, search, orden])
 
   const bajar = useMutation({
     mutationFn: async ({ i, formato, ver }: { i: ResumenContrato; formato: 'pdf' | 'docx'; ver?: boolean }) => {
@@ -119,6 +148,10 @@ function ListaContratos() {
             className="h-11 w-full rounded-xl border border-line bg-card pl-10 pr-9 text-sm placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25" />
           {search && <button onClick={() => setSearch('')} aria-label="Limpiar búsqueda" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-fg"><X className="size-4" /></button>}
         </div>
+        <select value={orden} onChange={e => setOrden(e.target.value as Orden)} aria-label="Ordenar contratos"
+          className="h-11 w-full rounded-xl border border-line bg-card px-3 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 sm:w-auto">
+          {ORDENES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
       </StaggerItem>
 
       {isLoading && <div className="grid place-items-center py-20"><Spinner className="size-8" /></div>}
