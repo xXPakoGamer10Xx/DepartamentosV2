@@ -228,86 +228,88 @@ input[type="number"]::-webkit-outer-spin-button {
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 /* ── Diálogos nativos (Top Layer) y contención de scroll del fondo ── */
-dialog.native-dialog {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  max-width: none;
-  max-height: none;
-  overflow: visible;
-}
-
-dialog.native-dialog[open] {
-  display: flex;
-}
-
-dialog.native-dialog:modal {
-  overscroll-behavior: contain;
-}
-
-dialog.native-dialog::backdrop {
-  overflow: hidden;
-  overscroll-behavior: contain;
-  background: rgb(0 0 0 / 0.6);
-  backdrop-filter: blur(2px);
-}
-
-/* ── Popovers (Top Layer) + respaldo para @oddbird/popover-polyfill ── */
-@supports not selector(:popover-open) {
-  [popover]:not(.\:popover-open) {
-    display: none;
-  }
-}
-
-[popover].anchored-popover {
-  margin: auto;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: inherit;
-  overflow: visible;
-}
-
-[popover].anchored-popover:is(:popover-open, .\:popover-open) {
-  display: block;
-}
-
-@supports (position-area: block-end) {
-  [popover].anchored-popover {
-    inset: auto;
+@layer components {
+  dialog.native-dialog {
     margin: 0;
-    position-area: block-end span-inline-end;
-    position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
-    margin-block: 0.5rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    max-width: none;
+    max-height: none;
+    overflow: visible;
   }
 
-  [popover].anchored-popover[data-align="right"] {
-    position-area: block-end span-inline-start;
+  dialog.native-dialog[open] {
+    display: flex;
   }
 
-  [popover].anchored-popover[data-direction="up"] {
-    position-area: block-start span-inline-end;
+  dialog.native-dialog:modal {
+    overscroll-behavior: contain;
   }
 
-  [popover].anchored-popover[data-direction="up"][data-align="right"] {
-    position-area: block-start span-inline-start;
+  dialog.native-dialog::backdrop {
+    overflow: hidden;
+    overscroll-behavior: contain;
+    background: rgb(0 0 0 / 0.6);
+    backdrop-filter: blur(2px);
   }
-}
 
-[popover].toast-region {
-  position: fixed;
-  inset: 0 0 auto 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  width: 100%;
-  max-width: none;
-  overflow: visible;
-  pointer-events: none;
+  /* ── Popovers (Top Layer) + respaldo para @oddbird/popover-polyfill ── */
+  @supports not selector(:popover-open) {
+    [popover]:not(.\:popover-open) {
+      display: none;
+    }
+  }
+
+  [popover].anchored-popover {
+    margin: auto;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    overflow: visible;
+  }
+
+  [popover].anchored-popover:is(:popover-open, .\:popover-open) {
+    display: block;
+  }
+
+  @supports (position-area: block-end) {
+    [popover].anchored-popover {
+      inset: auto;
+      margin: 0;
+      position-area: block-end span-inline-end;
+      position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+      margin-block: 0.5rem;
+    }
+
+    [popover].anchored-popover[data-align="right"] {
+      position-area: block-end span-inline-start;
+    }
+
+    [popover].anchored-popover[data-direction="up"] {
+      position-area: block-start span-inline-end;
+    }
+
+    [popover].anchored-popover[data-direction="up"][data-align="right"] {
+      position-area: block-start span-inline-start;
+    }
+  }
+
+  [popover].toast-region {
+    position: fixed;
+    inset: 0 0 auto 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    width: 100%;
+    max-width: none;
+    overflow: visible;
+    pointer-events: none;
+  }
 }
 
 /* ── Barra de progreso nativa estilizada (<progress>) ── */
