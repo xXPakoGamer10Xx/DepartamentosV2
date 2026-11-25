@@ -114,7 +114,7 @@ export default function AdminHome() {
         {verCobranza && (
           <StaggerItem>
             <Kpi icon={<TrendingUp />} tone="#10B981" label="Cobrado este mes" value={<AnimatedNumber value={cobrado} format={money} />}
-              hint={`de ${money(esperado)} esperados`} extra={<div className="mt-2"><ProgressBar value={pct} tone={pct >= 80 ? 'success' : 'primary'} /></div>} />
+              hint={`de ${money(esperado)} esperados`} extra={<div className="mt-2"><ProgressBar value={pct} tone={pct >= 80 ? 'success' : 'primary'} label="Progreso de cobranza del mes" /></div>} />
           </StaggerItem>
         )}
         {verCobranza && (

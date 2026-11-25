@@ -54,7 +54,7 @@ export function normalizarFechas(entrada: string[]): { fechas: string[]; error?:
   if (llenas.length > MAX_PAGOS_DEPOSITO) return { fechas: [], error: `El depósito admite hasta ${MAX_PAGOS_DEPOSITO} pagos.` }
   if (llenas.some(x => !esFechaReal(x))) return { fechas: [], error: 'Hay una fecha del depósito que no es válida.' }
   if (new Set(llenas).size !== llenas.length) return { fechas: [], error: 'Hay fechas del depósito repetidas.' }
-  return { fechas: [...llenas].sort() }
+  return { fechas: llenas.toSorted() }
 }
 
 export function notaDeposito(tipo: DepositoTipo, fechas: string[]): string {

@@ -198,23 +198,24 @@ export default function Reportes() {
       {porDepto.length > 0 && (
         <StaggerItem>
           <Card className="overflow-hidden p-0">
-            <h2 className="p-5 pb-3 font-bold">Ingreso por departamento</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[820px] text-right text-sm">
-                <thead className="bg-hover/50 text-[11px] font-bold uppercase tracking-wide text-muted">
-                  <tr><th className="sticky left-0 bg-card px-5 py-2.5 text-left">Depto</th>{MESES.map(m => <th key={m} className="px-2 py-2.5">{m}</th>)}<th className="px-5 py-2.5">Total</th></tr>
+            <h2 id="tabla-ingresos-depto" className="p-5 pb-3 font-bold">Ingreso por departamento</h2>
+            <div tabIndex={0} role="region" aria-labelledby="tabla-ingresos-depto" className="custom-scrollbar overflow-x-auto">
+              <table className="w-full min-w-[820px] border-separate border-spacing-0 text-right text-sm tabular-nums">
+                <caption className="sr-only">Ingreso mensual por departamento en {year}</caption>
+                <thead className="sticky top-0 z-10 bg-card text-[11px] font-bold uppercase tracking-wide text-muted">
+                  <tr className="bg-hover/50"><th scope="col" className="sticky left-0 z-20 bg-card px-5 py-2.5 text-left">Depto</th>{MESES.map(m => <th scope="col" key={m} className="px-2 py-2.5">{m}</th>)}<th scope="col" className="px-5 py-2.5">Total</th></tr>
                 </thead>
                 <tbody className="divide-y divide-line">
                   {porDepto.map(d => (
                     <tr key={d.depto_numero} className="transition hover:bg-hover/40">
-                      <td className="sticky left-0 bg-card px-5 py-2.5 text-left font-bold">{d.depto_numero}</td>
+                      <th scope="row" className="sticky left-0 bg-card px-5 py-2.5 text-left font-bold">{d.depto_numero}</th>
                       {d.meses.map((v, i) => <td key={i} className={`px-2 py-2.5 ${v > 0 ? '' : 'text-muted'}`}>{v > 0 ? k(v) : '·'}</td>)}
                       <td className="px-5 py-2.5 font-extrabold">{money0(d.total)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot className="border-t-2 border-line-strong bg-hover/50 font-extrabold">
-                  <tr><td className="sticky left-0 bg-card px-5 py-2.5 text-left">Total</td>{meses.map((m, i) => <td key={i} className="px-2 py-2.5">{m.total > 0 ? k(m.total) : '·'}</td>)}<td className="px-5 py-2.5">{money0(mensual.data?.total_anual ?? 0)}</td></tr>
+                  <tr><th scope="row" className="sticky left-0 bg-card px-5 py-2.5 text-left">Total</th>{meses.map((m, i) => <td key={i} className="px-2 py-2.5">{m.total > 0 ? k(m.total) : '·'}</td>)}<td className="px-5 py-2.5">{money0(mensual.data?.total_anual ?? 0)}</td></tr>
                 </tfoot>
               </table>
             </div>

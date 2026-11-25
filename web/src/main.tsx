@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MotionConfig } from 'motion/react'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
@@ -9,6 +10,11 @@ import { VisorPdfHost } from './components/VisorPdf'
 import { ToastProvider } from './components/ui/Toast'
 import { AuthProvider } from './lib/auth'
 import './index.css'
+
+// Carga condicional del polyfill de Popover API solo en navegadores sin soporte nativo.
+if (typeof HTMLElement !== 'undefined' && !Object.hasOwn(HTMLElement.prototype, 'popover')) {
+  void import('@oddbird/popover-polyfill')
+}
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: true } },
@@ -29,16 +35,18 @@ registerSW({
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthProvider>
-          <ToastProvider>
-            <App />
-            <VisorPdfHost />
-          </ToastProvider>
-        </AuthProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
+      <MotionConfig reducedMotion="user">
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            <AuthProvider>
+              <ToastProvider>
+                <App />
+                <VisorPdfHost />
+              </ToastProvider>
+            </AuthProvider>
+          </BrowserRouter>
+        </QueryClientProvider>
+      </MotionConfig>
     </ErrorBoundary>
   </StrictMode>,
 )

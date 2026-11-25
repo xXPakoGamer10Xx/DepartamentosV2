@@ -3,7 +3,6 @@ import { motion } from 'motion/react'
 import { NavLink } from 'react-router-dom'
 import { type NavItem } from './nav'
 
-
 export function SideLink({
   item,
   collapsed,
@@ -15,18 +14,22 @@ export function SideLink({
   onClick?: () => void
   onHover?: (label: string | null, top: number) => void
 }) {
+  const showTip = (el: HTMLAnchorElement) => {
+    if (collapsed && onHover) {
+      const r = el.getBoundingClientRect()
+      onHover(item.label, r.top + r.height / 2)
+    }
+  }
+
   return (
     <NavLink
       to={item.to}
       end={item.to === '/'}
       onClick={onClick}
-      onMouseEnter={e => {
-        if (collapsed && onHover) {
-          const r = e.currentTarget.getBoundingClientRect()
-          onHover(item.label, r.top + r.height / 2)
-        }
-      }}
+      onMouseEnter={e => showTip(e.currentTarget)}
       onMouseLeave={() => onHover?.(null, 0)}
+      onFocus={e => showTip(e.currentTarget)}
+      onBlur={() => onHover?.(null, 0)}
       aria-label={item.label}
       className={({ isActive }) =>
         clsx(
@@ -57,7 +60,7 @@ export function SideLink({
             className="relative z-10 grid size-8 shrink-0 place-items-center rounded-lg transition-transform duration-200 group-hover:scale-105"
             style={isActive ? { background: item.color, color: '#fff' } : undefined}
           >
-            <item.icon className="size-[18px]" />
+            <item.icon className="size-[18px]" aria-hidden="true" />
           </span>
           {!collapsed && <span className="relative z-10 truncate">{item.label}</span>}
         </>
@@ -65,7 +68,6 @@ export function SideLink({
     </NavLink>
   )
 }
-
 
 export function BottomLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
   return (
@@ -81,7 +83,7 @@ export function BottomLink({ item, onClick }: { item: NavItem; onClick?: () => v
                 style={{ background: item.color }}
               />
             )}
-            <item.icon className="relative z-10 size-5 transition-transform duration-200" style={{ color: isActive ? '#fff' : 'var(--text-muted)' }} />
+            <item.icon aria-hidden="true" className="relative z-10 size-5 transition-transform duration-200" style={{ color: isActive ? '#fff' : 'var(--text-muted)' }} />
           </span>
           <span className={clsx('text-[10px] font-semibold transition-colors', isActive ? 'text-fg' : 'text-muted')}>{item.label}</span>
         </>

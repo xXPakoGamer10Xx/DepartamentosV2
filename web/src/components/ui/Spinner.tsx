@@ -1,7 +1,5 @@
-import { Loader2 } from 'lucide-react'
-
-export function Spinner({ className = 'size-6' }: { className?: string }) {
-  return <Loader2 className={`animate-spin text-primary ${className}`} aria-label="Cargando" />
+export function Spinner({ className = 'size-6', label = 'Cargando' }: { className?: string; label?: string }) {
+  return <progress aria-label={label} className={`loading-spinner ${className}`} />
 }
 
 export function FullPageSpinner() {

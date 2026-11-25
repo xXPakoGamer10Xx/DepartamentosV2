@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { ChevronLeft, ChevronRight, LogOut, MoreHorizontal } from 'lucide-react'
 import { AnimatePresence, motion, useDragControls } from 'motion/react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
 import { iniciales } from '../../lib/format'
@@ -17,10 +17,17 @@ import { SideLink, BottomLink } from './NavLinks'
 const MAX_BOTTOM = 4 // además del botón "Más"
 const SIDEBAR_KEY = 'nethrent_sidebar_collapsed'
 
+const fueraDeDialogo = (e: PointerEvent, dialog: HTMLDialogElement) => {
+  const r = dialog.getBoundingClientRect()
+  return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom
+}
+
 export function AppShell() {
   const { user, can, logout } = useAuth()
   const [moreEn, setMoreEn] = useState<string | null>(null)
   const dragSheet = useDragControls()
+  const moreDialogRef = useRef<HTMLDialogElement>(null)
+  const moreTitleId = useId()
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem(SIDEBAR_KEY) === '1' } catch { return false }
   })
@@ -62,7 +69,43 @@ export function AppShell() {
 
   // La hoja "Más" está abierta solo en la ruta donde se abrió: al navegar se cierra sola.
   const more = moreEn === pathname
-  const setMore = (abierta: boolean) => setMoreEn(abierta ? pathname : null)
+  const setMore = useCallback((abierta: boolean) => setMoreEn(abierta ? pathname : null), [pathname])
+
+  useEffect(() => {
+    const dialog = moreDialogRef.current
+    if (!dialog) return
+    if (more) {
+      if (!dialog.open) dialog.showModal()
+    } else if (dialog.open) {
+      dialog.close()
+    }
+  }, [more])
+
+  useEffect(() => {
+    const dialog = moreDialogRef.current
+    if (!dialog || !more) return
+    const onNativeClose = () => {
+      dialog.returnValue = ''
+      setMore(false)
+    }
+    dialog.addEventListener('close', onNativeClose)
+    if (!('closedBy' in HTMLDialogElement.prototype)) {
+      let pressedOutside = false
+      const onPointerDown = (e: PointerEvent) => { pressedOutside = fueraDeDialogo(e, dialog) }
+      const onPointerUp = (e: PointerEvent) => {
+        if (pressedOutside && fueraDeDialogo(e, dialog)) dialog.close()
+        pressedOutside = false
+      }
+      dialog.addEventListener('pointerdown', onPointerDown)
+      dialog.addEventListener('pointerup', onPointerUp)
+      return () => {
+        dialog.removeEventListener('close', onNativeClose)
+        dialog.removeEventListener('pointerdown', onPointerDown)
+        dialog.removeEventListener('pointerup', onPointerUp)
+      }
+    }
+    return () => dialog.removeEventListener('close', onNativeClose)
+  }, [more, setMore])
 
   const items = useMemo(
     () => navFor(user!.rol).filter(i => (!i.adminOnly || user!.rol === 'admin') && (!i.permiso || can(i.permiso)) && (usaApp || !i.conApp)),
@@ -83,6 +126,13 @@ export function AppShell() {
 
   return (
     <div className="flex h-full overflow-hidden">
+      <a
+        href="#main-content"
+        className="visually-hidden fixed left-3 top-3 z-[200] rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg"
+      >
+        Ir al contenido principal
+      </a>
+
       {/* ── Sidebar (escritorio) ─────────────────────────────────────────── */}
       <motion.aside
         initial={false}
@@ -95,17 +145,18 @@ export function AppShell() {
           type="button"
           onClick={() => { setHoveredTip(null); toggleSidebar() }}
           aria-label={collapsed ? 'Mostrar menú lateral' : 'Ocultar menú lateral'}
+          aria-expanded={!collapsed}
           title={collapsed ? 'Mostrar menú' : 'Ocultar menú'}
           className="absolute -right-3.5 top-6 z-30 grid size-7 cursor-pointer place-items-center rounded-full border border-line-strong bg-card text-fg-2 shadow-md transition hover:border-primary hover:bg-hover hover:text-fg active:scale-95"
         >
-          {collapsed ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}
+          {collapsed ? <ChevronRight className="size-4" aria-hidden="true" /> : <ChevronLeft className="size-4" aria-hidden="true" />}
         </button>
 
         <div className={clsx('flex shrink-0 items-center pb-2.5 pt-4', collapsed ? 'justify-center px-2' : 'px-5')}>
           <BrandLogo collapsed={collapsed} />
         </div>
 
-        <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overflow-x-hidden px-3 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <nav aria-label="Principal" className="no-scrollbar min-h-0 flex-1 space-y-0.5 overflow-y-auto overflow-x-hidden px-3 py-1.5">
           {items.map(i => (
             <SideLink
               key={i.to}
@@ -121,6 +172,7 @@ export function AppShell() {
           {collapsed && hoveredTip && (
             <motion.span
               key={hoveredTip.label}
+              aria-hidden="true"
               initial={{ opacity: 0, x: -4 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -4 }}
@@ -149,17 +201,18 @@ export function AppShell() {
                 {iniciales(user.nombre_completo)}
               </span>
               <button
+                type="button"
                 onClick={logout}
                 aria-label="Cerrar sesión"
                 title="Cerrar sesión"
                 className="rounded-lg p-1.5 text-muted transition hover:bg-hover hover:text-danger active:scale-95"
               >
-                <LogOut className="size-4" />
+                <LogOut className="size-4" aria-hidden="true" />
               </button>
             </>
           ) : (
             <>
-              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-sm font-bold text-white shadow-sm shadow-primary/25">
+              <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-sm font-bold text-white shadow-sm shadow-primary/25">
                 {iniciales(user.nombre_completo)}
               </span>
               <div className="min-w-0 flex-1">
@@ -169,12 +222,13 @@ export function AppShell() {
               <div className="flex items-center gap-0.5">
                 <NotificationBell align="left" direction="up" subtle />
                 <button
+                  type="button"
                   onClick={logout}
                   aria-label="Cerrar sesión"
                   title="Cerrar sesión"
                   className="rounded-lg p-2 text-muted transition hover:bg-hover hover:text-danger active:scale-95"
                 >
-                  <LogOut className="size-[18px]" />
+                  <LogOut className="size-[18px]" aria-hidden="true" />
                 </button>
               </div>
             </>
@@ -189,7 +243,7 @@ export function AppShell() {
           <NotificationBell align="right" />
         </header>
 
-        <main className="flex-1 overflow-y-auto">
+        <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto outline-none">
           <motion.div
             key={`${pathname}-${navSeq}`}
             initial={{ opacity: 0, y: 10 }}
@@ -202,13 +256,13 @@ export function AppShell() {
         </main>
 
         {/* ── Barra inferior (móvil) ─────────────────────────────────────── */}
-        <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card/95 backdrop-blur lg:hidden">
+        <nav aria-label="Accesos rápidos" className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card/95 backdrop-blur lg:hidden">
           <ul className="mx-auto flex max-w-xl items-stretch justify-around px-2 py-1.5">
             {bottom.map(i => <li key={i.to} className="flex-1"><BottomLink item={i} onClick={bumpNav} /></li>)}
             {rest.length > 0 && (
               <li className="flex-1">
-                <button onClick={() => setMore(true)} aria-label="Más opciones" className="flex w-full flex-col items-center gap-0.5 rounded-xl py-1.5 transition active:scale-95">
-                  <span className="grid size-8 place-items-center"><MoreHorizontal className="size-5" style={{ color: 'var(--text-muted)' }} /></span>
+                <button type="button" onClick={() => setMore(true)} aria-label="Más opciones" aria-expanded={more} className="flex w-full flex-col items-center gap-0.5 rounded-xl py-1.5 transition active:scale-95">
+                  <span className="grid size-8 place-items-center"><MoreHorizontal className="size-5" aria-hidden="true" style={{ color: 'var(--text-muted)' }} /></span>
                   <span className="text-[10px] font-semibold text-muted">Más</span>
                 </button>
               </li>
@@ -216,63 +270,57 @@ export function AppShell() {
           </ul>
         </nav>
 
-        <AnimatePresence>
-          {more && (
-            <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="absolute inset-0 bg-black/55 backdrop-blur-[2px]"
-                onClick={() => setMore(false)}
-              />
-              <motion.div
-                initial={{ y: '100%' }}
-                animate={{ y: 0 }}
-                exit={{ y: '100%' }}
-                transition={{ type: 'spring', stiffness: 360, damping: 32 }}
-                drag="y"
-                dragControls={dragSheet}
-                dragListener={false}
-                dragConstraints={{ top: 0, bottom: 0 }}
-                dragElastic={{ top: 0, bottom: 0.6 }}
-                onDragEnd={(_, info) => { if (info.offset.y > 90 || info.velocity.y > 500) setMore(false) }}
-                className="safe-bottom absolute inset-x-0 bottom-0 rounded-t-3xl border-t border-line bg-card px-5 pb-5 shadow-2xl"
+        {more && (
+          <dialog
+            ref={moreDialogRef}
+            aria-labelledby={moreTitleId}
+            {...({ closedby: 'any' } as Record<string, string>)}
+            className="native-dialog mt-auto mb-0 w-full flex-col lg:hidden"
+          >
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              transition={{ type: 'spring', stiffness: 360, damping: 32 }}
+              drag="y"
+              dragControls={dragSheet}
+              dragListener={false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.6 }}
+              onDragEnd={(_, info) => { if (info.offset.y > 90 || info.velocity.y > 500) moreDialogRef.current?.close() }}
+              className="safe-bottom w-full rounded-t-3xl border-t border-line bg-card px-5 pb-5 shadow-2xl"
+            >
+              {/* La pestañita: se desliza hacia abajo o se toca para ocultar el menú */}
+              <button
+                type="button"
+                aria-label="Ocultar menú"
+                onClick={() => moreDialogRef.current?.close()}
+                onPointerDown={e => dragSheet.start(e)}
+                className="mx-auto flex w-full cursor-grab touch-none justify-center pb-3 pt-3 active:cursor-grabbing"
               >
-                {/* La pestañita: se desliza hacia abajo o se toca para ocultar el menú */}
-                <button
-                  type="button"
-                  aria-label="Ocultar menú"
-                  onClick={() => setMore(false)}
-                  onPointerDown={e => dragSheet.start(e)}
-                  className="mx-auto flex w-full cursor-grab touch-none justify-center pb-3 pt-3 active:cursor-grabbing"
-                >
-                  <span className="h-1 w-10 rounded-full bg-line-strong" />
-                </button>
-                <p className="mb-4 text-sm font-bold">{user.nombre_completo}</p>
-                <div className="grid grid-cols-3 gap-3">
-                  {rest.map((i, idx) => (
-                    <motion.div
-                      key={i.to}
-                      initial={{ opacity: 0, y: 12, scale: 0.94 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      transition={{ delay: idx * 0.04, type: 'spring', stiffness: 340, damping: 24 }}
-                    >
-                      <NavLink to={i.to} className="flex flex-col items-center gap-2 rounded-2xl bg-hover p-3 text-center transition active:scale-95">
-                        <span className="grid size-10 place-items-center rounded-xl text-white shadow-sm" style={{ background: i.color }}><i.icon className="size-5" /></span>
-                        <span className="text-xs font-semibold">{i.label}</span>
-                      </NavLink>
-                    </motion.div>
-                  ))}
-                </div>
-                <button onClick={logout} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-line text-sm font-semibold text-danger transition hover:bg-danger-soft active:scale-[0.98]">
-                  <LogOut className="size-4" /> Cerrar sesión
-                </button>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
+                <span className="h-1 w-10 rounded-full bg-line-strong" aria-hidden="true" />
+              </button>
+              <h1 id={moreTitleId} className="mb-4 text-sm font-bold">{user.nombre_completo}</h1>
+              <div className="grid grid-cols-3 gap-3">
+                {rest.map((i, idx) => (
+                  <motion.div
+                    key={i.to}
+                    initial={{ opacity: 0, y: 12, scale: 0.94 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ delay: idx * 0.04, type: 'spring', stiffness: 340, damping: 24 }}
+                  >
+                    <NavLink to={i.to} className="flex flex-col items-center gap-2 rounded-2xl bg-hover p-3 text-center transition active:scale-95">
+                      <span className="grid size-10 place-items-center rounded-xl text-white shadow-sm" style={{ background: i.color }}><i.icon className="size-5" aria-hidden="true" /></span>
+                      <span className="text-xs font-semibold">{i.label}</span>
+                    </NavLink>
+                  </motion.div>
+                ))}
+              </div>
+              <button type="button" onClick={logout} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-line text-sm font-semibold text-danger transition hover:bg-danger-soft active:scale-[0.98]">
+                <LogOut className="size-4" aria-hidden="true" /> Cerrar sesión
+              </button>
+            </motion.div>
+          </dialog>
+        )}
       </div>
     </div>
   )

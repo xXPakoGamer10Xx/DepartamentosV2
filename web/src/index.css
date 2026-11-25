@@ -1,44 +1,122 @@
 @import 'tailwindcss';
 
-/* Tema: sigue el modo claro/oscuro del sistema (igual que la app anterior). Paleta "Executive Slate". */
+/* Tema: sigue el modo claro/oscuro del sistema. Paleta "Executive Slate". */
 :root {
-  --bg: #f8fafc;
-  --card: #ffffff;
-  --card-elevated: #ffffff;
-  --text: #0f172a;
-  --text-2: #475569;
-  --text-muted: #94a3b8;
-  --border: #e2e8f0;
-  --border-strong: #cbd5e1;
+  color-scheme: light dark;
+
+  --bg-light: #f8fafc;
+  --bg-dark: #0e1321;
+  --card-light: #ffffff;
+  --card-dark: #1a1f2e;
+  --card-elevated-light: #ffffff;
+  --card-elevated-dark: #232842;
+  --text-light: #0f172a;
+  --text-dark: #f1f5f9;
+  --text-2-light: #475569;
+  --text-2-dark: #cbd5e1;
+  --text-muted-light: #64748b;
+  --text-muted-dark: #94a3b8;
+  --border-light: #e2e8f0;
+  --border-dark: rgba(255, 255, 255, 0.1);
+  --border-strong-light: #cbd5e1;
+  --border-strong-dark: rgba(255, 255, 255, 0.18);
+  --primary-light-bg: #eff6ff;
+  --primary-dark-bg: rgba(59, 130, 246, 0.18);
+  --success-light-bg: #d1fae5;
+  --success-dark-bg: rgba(16, 185, 129, 0.16);
+  --warning-light-bg: #fef3c7;
+  --warning-dark-bg: rgba(245, 158, 11, 0.16);
+  --danger-light-bg: #fee2e2;
+  --danger-dark-bg: rgba(239, 68, 68, 0.16);
+  --hover-light: rgba(15, 23, 42, 0.05);
+  --hover-dark: rgba(255, 255, 255, 0.06);
+  --scrollbar-thumb-light: #64748b;
+  --scrollbar-thumb-dark: #64748b;
+  --scrollbar-track-light: #e2e8f0;
+  --scrollbar-track-dark: #1a1f2e;
+
+  /* Tokens activos (respaldo para navegadores sin light-dark()) */
+  --bg: var(--bg-light);
+  --card: var(--card-light);
+  --card-elevated: var(--card-elevated-light);
+  --text: var(--text-light);
+  --text-2: var(--text-2-light);
+  --text-muted: var(--text-muted-light);
+  --border: var(--border-light);
+  --border-strong: var(--border-strong-light);
   --primary: #3b82f6;
   --primary-dark: #2563eb;
-  --primary-light: #eff6ff;
+  --primary-light: var(--primary-light-bg);
   --success: #10b981;
-  --success-light: #d1fae5;
+  --success-light: var(--success-light-bg);
   --warning: #f59e0b;
-  --warning-light: #fef3c7;
+  --warning-light: var(--warning-light-bg);
   --danger: #ef4444;
-  --danger-light: #fee2e2;
-  --hover: rgba(15, 23, 42, 0.05);
-  color-scheme: light;
+  --danger-light: var(--danger-light-bg);
+  --hover: var(--hover-light);
+  --scrollbar-thumb: var(--scrollbar-thumb-light);
+  --scrollbar-track: var(--scrollbar-track-light);
+  accent-color: var(--primary);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0e1321;
-    --card: #1a1f2e;
-    --card-elevated: #232842;
-    --text: #f1f5f9;
-    --text-2: #94a3b8;
-    --text-muted: #64748b;
-    --border: rgba(255, 255, 255, 0.08);
-    --border-strong: rgba(255, 255, 255, 0.15);
-    --primary-light: rgba(59, 130, 246, 0.18);
-    --success-light: rgba(16, 185, 129, 0.16);
-    --warning-light: rgba(245, 158, 11, 0.16);
-    --danger-light: rgba(239, 68, 68, 0.16);
-    --hover: rgba(255, 255, 255, 0.06);
-    color-scheme: dark;
+    --bg: var(--bg-dark);
+    --card: var(--card-dark);
+    --card-elevated: var(--card-elevated-dark);
+    --text: var(--text-dark);
+    --text-2: var(--text-2-dark);
+    --text-muted: var(--text-muted-dark);
+    --border: var(--border-dark);
+    --border-strong: var(--border-strong-dark);
+    --primary-light: var(--primary-dark-bg);
+    --success-light: var(--success-dark-bg);
+    --warning-light: var(--warning-dark-bg);
+    --danger-light: var(--danger-dark-bg);
+    --hover: var(--hover-dark);
+    --scrollbar-thumb: var(--scrollbar-thumb-dark);
+    --scrollbar-track: var(--scrollbar-track-dark);
+  }
+}
+
+@supports (color: light-dark(white, black)) {
+  :root {
+    --bg: light-dark(var(--bg-light), var(--bg-dark));
+    --card: light-dark(var(--card-light), var(--card-dark));
+    --card-elevated: light-dark(var(--card-elevated-light), var(--card-elevated-dark));
+    --text: light-dark(var(--text-light), var(--text-dark));
+    --text-2: light-dark(var(--text-2-light), var(--text-2-dark));
+    --text-muted: light-dark(var(--text-muted-light), var(--text-muted-dark));
+    --border: light-dark(var(--border-light), var(--border-dark));
+    --border-strong: light-dark(var(--border-strong-light), var(--border-strong-dark));
+    --primary-light: light-dark(var(--primary-light-bg), var(--primary-dark-bg));
+    --success-light: light-dark(var(--success-light-bg), var(--success-dark-bg));
+    --warning-light: light-dark(var(--warning-light-bg), var(--warning-dark-bg));
+    --danger-light: light-dark(var(--danger-light-bg), var(--danger-dark-bg));
+    --hover: light-dark(var(--hover-light), var(--hover-dark));
+    --scrollbar-thumb: light-dark(var(--scrollbar-thumb-light), var(--scrollbar-thumb-dark));
+    --scrollbar-track: light-dark(var(--scrollbar-track-light), var(--scrollbar-track-dark));
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --scrollbar-thumb: #0f172a;
+    --scrollbar-track: #ffffff;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --scrollbar-thumb: #f8fafc;
+      --scrollbar-track: #0e1321;
+    }
+  }
+
+  @supports (color: light-dark(white, black)) {
+    :root {
+      --scrollbar-thumb: light-dark(#0f172a, #f8fafc);
+      --scrollbar-track: light-dark(#ffffff, #0e1321);
+    }
   }
 }
 
@@ -69,14 +147,38 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
+}
+
+h1, h2, h3, th {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
 }
 
 /* Áreas seguras en iPhone (PWA instalada) sin sobrescribir el padding base en escritorio */
 @layer utilities {
   .safe-top { padding-top: max(0.75rem, env(safe-area-inset-top)); }
   .safe-bottom { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+}
+
+/* Utilidad canónica accesible (oculta visualmente, visible al enfocar en skip links) */
+.visually-hidden:where(:not(:focus-within, :active)) {
+  position: absolute !important;
+  clip-path: inset(50%) !important;
+  overflow: hidden !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  white-space: nowrap !important;
 }
 
 button, a { -webkit-tap-highlight-color: transparent; }
@@ -97,8 +199,19 @@ textarea:disabled {
   cursor: not-allowed;
 }
 
-textarea {
-  resize: none;
+/* Auto-ajuste de altura para textareas (mejora progresiva con respaldo resize-y) */
+.field-sizing-textarea {
+  resize: vertical;
+}
+
+@supports (field-sizing: content) {
+  .field-sizing-textarea {
+    field-sizing: content;
+    height: auto;
+    min-block-size: 3lh;
+    max-block-size: 14lh;
+    resize: none;
+  }
 }
 
 input[type="number"] {
@@ -114,36 +227,223 @@ input[type="number"]::-webkit-outer-spin-button {
 
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
-/* ── Scrollbar estilizado (delgado y contenido dentro de tarjetas/modales) ── */
-.custom-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-strong) transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar,
-*::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track,
-*::-webkit-scrollbar-track {
+/* ── Diálogos nativos (Top Layer) y contención de scroll del fondo ── */
+dialog.native-dialog {
+  margin: 0;
+  padding: 0;
+  border: 0;
   background: transparent;
-  margin-block: 8px;
+  color: inherit;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb,
-*::-webkit-scrollbar-thumb {
-  background-color: var(--border-strong);
+dialog.native-dialog[open] {
+  display: flex;
+}
+
+dialog.native-dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog.native-dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+  background: rgb(0 0 0 / 0.6);
+  backdrop-filter: blur(2px);
+}
+
+/* ── Popovers (Top Layer) + respaldo para @oddbird/popover-polyfill ── */
+@supports not selector(:popover-open) {
+  [popover]:not(.\:popover-open) {
+    display: none;
+  }
+}
+
+[popover].anchored-popover {
+  margin: auto;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  overflow: visible;
+}
+
+[popover].anchored-popover:is(:popover-open, .\:popover-open) {
+  display: block;
+}
+
+@supports (position-area: block-end) {
+  [popover].anchored-popover {
+    inset: auto;
+    margin: 0;
+    position-area: block-end span-inline-end;
+    position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+    margin-block: 0.5rem;
+  }
+
+  [popover].anchored-popover[data-align="right"] {
+    position-area: block-end span-inline-start;
+  }
+
+  [popover].anchored-popover[data-direction="up"] {
+    position-area: block-start span-inline-end;
+  }
+
+  [popover].anchored-popover[data-direction="up"][data-align="right"] {
+    position-area: block-start span-inline-start;
+  }
+}
+
+[popover].toast-region {
+  position: fixed;
+  inset: 0 0 auto 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  width: 100%;
+  max-width: none;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* ── Barra de progreso nativa estilizada (<progress>) ── */
+progress.native-progress {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 0.5rem;
+  border: 0 solid;
+  border-radius: 9999px;
+  overflow: clip;
+  background: var(--hover);
+  color: var(--progress-fill, var(--success));
+}
+
+progress.native-progress::-webkit-progress-bar {
+  background: transparent;
+}
+
+progress.native-progress::-webkit-progress-value {
+  background: var(--progress-fill, var(--success));
+  border-radius: 9999px;
+  transition: inline-size 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+progress.native-progress::-moz-progress-bar {
+  background: var(--progress-fill, var(--success));
   border-radius: 9999px;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb:hover,
-*::-webkit-scrollbar-thumb:hover {
-  background-color: var(--text-muted);
+/* ── Spinner nativo sobre <progress> indeterminado ── */
+progress.loading-spinner:indeterminate {
+  appearance: none;
+  border: 0;
+  display: inline-block;
+  border-radius: 50%;
+  --spinner-thickness: 2.5px;
+  --spinner-color: var(--primary);
+  --spinner-track: var(--border);
+  --_used-spinner-duration: 0.9s;
+  background: conic-gradient(from 0deg, var(--spinner-color) 0 265deg, transparent 265deg 360deg) var(--spinner-track);
+  animation: progress-spin var(--_used-spinner-duration) linear infinite;
 }
 
-/* ── Animaciones y Keyframes (Executive Suite) ─────────────────────────── */
+@supports (background-clip: border-area) {
+  progress.loading-spinner:indeterminate {
+    background-clip: border-area;
+    border: var(--spinner-thickness) solid transparent;
+    background-origin: border-box;
+  }
+}
+
+@supports not (background-clip: border-area) {
+  progress.loading-spinner:indeterminate {
+    mask-image: radial-gradient(farthest-side, transparent calc(100% - var(--spinner-thickness)), black calc(100% - var(--spinner-thickness)));
+  }
+}
+
+progress.loading-spinner:indeterminate::-webkit-progress-bar {
+  display: none;
+  background: none;
+}
+
+progress.loading-spinner:indeterminate::-webkit-progress-value {
+  display: none;
+  background: none;
+}
+
+progress.loading-spinner:indeterminate::-moz-progress-bar {
+  display: none;
+  background: none;
+}
+
+@keyframes progress-spin {
+  to {
+    rotate: 1turn;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  progress.loading-spinner:indeterminate {
+    --_used-spinner-duration: 6s;
+  }
+}
+
+/* ── Scrollbar estándar (delgado, con contraste >= 3:1 y respaldo WebKit aislado) ── */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+@supports not (scrollbar-color: auto) {
+  .custom-scrollbar {
+    scrollbar-width: auto;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+    margin-block: 8px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    border-radius: 9999px;
+  }
+}
+
+/* ── Forced Colors Mode (Windows High Contrast) ── */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  [role="tab"][aria-selected="true"] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+
+  dialog.native-dialog[open] > * {
+    border: 1px solid CanvasText;
+  }
+
+  progress.loading-spinner:indeterminate {
+    forced-color-adjust: none;
+    --spinner-color: CanvasText;
+    --spinner-track: Canvas;
+  }
+}
+
+/* ── Animaciones y Keyframes (opt-in respetando prefers-reduced-motion) ── */
 @keyframes qr-laser {
   0%, 100% { transform: translateY(-96px); opacity: 0.45; }
   50% { transform: translateY(96px); opacity: 1; }
@@ -172,41 +472,38 @@ input[type="number"]::-webkit-outer-spin-button {
   100% { transform: scale(1.07); }
 }
 
-.animate-qr-laser {
-  animation: qr-laser 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
-}
+@media (prefers-reduced-motion: no-preference) {
+  .animate-qr-laser {
+    animation: qr-laser 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  }
 
-.animate-bell-ring {
-  animation: bell-ring 0.75s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
-  transform-origin: top center;
-}
+  .animate-bell-ring {
+    animation: bell-ring 0.75s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+    transform-origin: top center;
+  }
 
-.animate-shimmer {
-  animation: shimmer 2.6s ease-in-out infinite;
-}
+  .animate-shimmer {
+    animation: shimmer 2.6s ease-in-out infinite;
+  }
 
-.animate-pulse-ring {
-  animation: pulse-ring 2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
-}
+  .animate-pulse-ring {
+    animation: pulse-ring 2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+  }
 
-.animate-ken-burns {
-  animation: ken-burns 22s ease-out forwards;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-qr-laser,
-  .animate-bell-ring,
-  .animate-shimmer,
-  .animate-pulse-ring,
   .animate-ken-burns {
-    animation: none !important;
+    animation: ken-burns 22s ease-out forwards;
   }
 }
 
+/* ── Diferir renderizado de filas/tarjetas largas fuera del pliegue inicial ── */
+.deferred-row {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto 4.5rem;
+}
 
 /* ── Revisión de plantillas de contrato: documento con los datos detectados resaltados ── */
 .docrev { font-family: 'Liberation Sans', Arial, Helvetica, sans-serif; font-size: 0.8125rem; line-height: 1.7; color: var(--text); }
-.docrev p, .docrev h2 { margin: 0 0 0.55rem; text-align: justify; }
+.docrev p, .docrev h2 { margin: 0 0 0.55rem; text-align: justify; hyphens: auto; }
 .docrev h2 { font-size: 1rem; font-weight: 800; text-align: center; }
 .docrev p.centro { text-align: center; }
 .docrev p.derecha { text-align: right; }
@@ -221,9 +518,3 @@ input[type="number"]::-webkit-outer-spin-button {
 .docrev mark.pers[data-label]::after { background: #8b5cf6; }
 .docrev mark.auto[data-label]::after { background: var(--success); }
 .docrev .borrado { opacity: 0.35; text-decoration: line-through; }
-
-/* En el celular no se muestran barras de desplazamiento (se siguen pudiendo desplazar con el dedo). */
-@media (max-width: 1023px) {
-  * { scrollbar-width: none; }
-  *::-webkit-scrollbar { display: none; }
-}

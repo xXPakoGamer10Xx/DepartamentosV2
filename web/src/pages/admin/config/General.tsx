@@ -82,20 +82,28 @@ export function General() {
         <fieldset className="space-y-2">
           <legend className="text-xs font-bold uppercase tracking-wide text-fg-2">Modo de uso</legend>
           <p className="text-xs text-muted">Elige si tus inquilinos entrarán a la plataforma. Se aplica al instante.</p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Modo de uso">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {([
-              { v: true, t: 'Con inquilinos', d: 'Tus inquilinos entran a la app: ven su renta, pagan con QR, envían comprobantes y abren tickets.' },
-              { v: false, t: 'Uso interno', d: 'Solo tú y tu equipo cobran y llevan el control. Se ocultan QR, Comprobantes y Tickets.' },
+              { id: 'modo-con-inquilinos', v: true, t: 'Con inquilinos', d: 'Tus inquilinos entran a la app: ven su renta, pagan con QR, envían comprobantes y abren tickets.' },
+              { id: 'modo-uso-interno', v: false, t: 'Uso interno', d: 'Solo tú y tu equipo cobran y llevan el control. Se ocultan QR, Comprobantes y Tickets.' },
             ] as const).map(o => (
-              <button key={o.t} type="button" role="radio" aria-checked={usaApp === o.v} disabled={guardar.isPending}
-                onClick={() => usaApp !== o.v && guardar.mutate({ usa_qr_inquilinos: o.v ? 'true' : 'false' })}
-                className={`rounded-xl border-2 p-4 text-left transition ${usaApp === o.v ? 'border-primary bg-primary-soft' : 'border-line hover:bg-hover'}`}>
+              <label key={o.t} htmlFor={o.id}
+                className={`relative block cursor-pointer rounded-xl border-2 p-4 text-left transition has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary ${usaApp === o.v ? 'border-primary bg-primary-soft' : 'border-line hover:bg-hover'} ${guardar.isPending ? 'opacity-60' : ''}`}>
+                <input
+                  id={o.id}
+                  type="radio"
+                  name="modo_uso"
+                  checked={usaApp === o.v}
+                  disabled={guardar.isPending}
+                  onChange={() => usaApp !== o.v && guardar.mutate({ usa_qr_inquilinos: o.v ? 'true' : 'false' })}
+                  className="sr-only"
+                />
                 <span className="flex items-center gap-2 text-sm font-bold">
-                  <span className={`grid size-4 place-items-center rounded-full border-2 ${usaApp === o.v ? 'border-primary' : 'border-line'}`}>{usaApp === o.v && <span className="size-2 rounded-full bg-primary" />}</span>
+                  <span aria-hidden="true" className={`grid size-4 place-items-center rounded-full border-2 ${usaApp === o.v ? 'border-primary' : 'border-line'}`}>{usaApp === o.v && <span className="size-2 rounded-full bg-primary" />}</span>
                   {o.t}
                 </span>
                 <span className="mt-1 block text-xs text-fg-2">{o.d}</span>
-              </button>
+              </label>
             ))}
           </div>
         </fieldset>
@@ -110,7 +118,7 @@ export function General() {
         <div className="flex flex-wrap gap-2">
           {RECORD_OPCIONES.map(d => {
             const on = record.includes(d)
-            return <button key={d} type="button" onClick={() => setRecord(r => (on ? r.filter(x => x !== d) : [...r, d].sort((a, b) => b - a)))}
+            return <button key={d} type="button" aria-pressed={on} onClick={() => setRecord(r => (on ? r.filter(x => x !== d) : [...r, d].sort((a, b) => b - a)))}
               className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition ${on ? 'border-primary bg-primary text-white' : 'border-line bg-card text-fg-2 hover:bg-hover'}`}>{d === 0 ? 'El día' : `${d} día${d > 1 ? 's' : ''} antes`}</button>
           })}
         </div>

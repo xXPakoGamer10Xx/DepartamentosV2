@@ -99,7 +99,7 @@ export default function InquilinoPagos() {
       )}
 
       <Modal open={!!verComprobante} title="Comprobante de pago" onClose={() => setVerComprobante(null)}>
-        {verComprobante && <img src={verComprobante} alt="Comprobante" className="max-h-[70vh] w-full rounded-xl object-contain" />}
+        {verComprobante && <img src={verComprobante} alt="Comprobante" className="max-h-[70dvh] w-full rounded-xl object-contain" />}
       </Modal>
     </div>
   )

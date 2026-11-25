@@ -143,12 +143,12 @@ export default function Scan() {
             <StaggerItem>
               <Card className="space-y-3">
                 <p className="text-sm font-semibold">¿Sin cámara? Ingresa el código</p>
-                <div className="flex gap-2">
-                  <input value={manual} onChange={e => { setManual(e.target.value); setError('') }} onKeyDown={e => e.key === 'Enter' && buscarManual()}
-                    placeholder="Código del QR (o pega la liga)" aria-label="Código del QR" autoCapitalize="none" autoCorrect="off"
-                    className="h-12 flex-1 rounded-xl border border-line bg-card px-4 text-sm placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25" />
-                  <Button onClick={buscarManual} loading={buscando} disabled={!manual.trim()} aria-label="Buscar" icon={<Search className="size-4" />} className="px-4" />
-                </div>
+                <form className="flex gap-2" onSubmit={e => { e.preventDefault(); if (manual.trim()) void buscarManual() }}>
+                  <input value={manual} onChange={e => { setManual(e.target.value); setError('') }}
+                    placeholder="Código del QR (o pega la liga)" aria-label="Código del QR" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="search"
+                    className="min-h-12 flex-1 rounded-xl border border-line bg-card px-4 text-base placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 sm:text-sm" />
+                  <Button type="submit" loading={buscando} disabled={!manual.trim()} aria-label="Buscar" icon={<Search className="size-4" />} className="px-4" />
+                </form>
                 <ShakeError error={error}>
                   <p role="alert" className="text-sm text-danger">{error}</p>
                 </ShakeError>

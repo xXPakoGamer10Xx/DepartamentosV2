@@ -1,8 +1,6 @@
 import clsx from 'clsx'
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
-import { AnimatePresence, motion } from 'motion/react'
-import { useEffect, useRef, useState, type ChangeEvent } from 'react'
-import { createPortal } from 'react-dom'
+import { useEffect, useId, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent } from 'react'
 import type { InputProps } from '../Input'
 
 const MESES = [
@@ -52,59 +50,45 @@ export function DateInput({
   const minStr = typeof min === 'string' ? min : undefined
   const maxStr = typeof max === 'string' ? max : undefined
 
+  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '')
+  const popoverId = `date-pop-${uid}`
+  const anchorName = `--date-anchor-${uid}`
+
   const [todayISO] = useState(getTodayISO)
   const [open, setOpen] = useState(false)
   const [view, setView] = useState(() => {
     const p = parseISO(valStr) ?? parseISO(todayISO) ?? { y: 2026, m: 0, d: 1 }
     return { y: p.y, m: p.m }
   })
-  const [pos, setPos] = useState<{ top: number; left: number; placeUp: boolean }>({ top: 0, left: 0, placeUp: false })
 
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popRef = useRef<HTMLDivElement>(null)
-
-  const computePos = () => {
-    const el = triggerRef.current
-    if (!el) return
-    const r = el.getBoundingClientRect()
-    const popHeight = 336
-    const popWidth = 288
-    const spaceBelow = window.innerHeight - r.bottom
-    const placeUp = spaceBelow < popHeight && r.top > popHeight
-    const left = Math.max(12, Math.min(r.left, window.innerWidth - popWidth - 12))
-    const top = placeUp ? r.top - 8 : r.bottom + 8
-    setPos({ top, left, placeUp })
-  }
-
-  const toggleOpen = () => {
-    if (disabled) return
-    if (!open) {
-      const p = parseISO(valStr) ?? parseISO(todayISO)
-      if (p) setView({ y: p.y, m: p.m })
-      computePos()
-    }
-    setOpen(o => !o)
-  }
+  const dayRefs = useRef<Array<HTMLButtonElement | null>>([])
 
   useEffect(() => {
-    if (!open) return
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node
-      if (!triggerRef.current?.contains(t) && !popRef.current?.contains(t)) setOpen(false)
+    const el = popRef.current
+    if (!el) return
+    const onToggle = (e: Event) => {
+      const te = e as ToggleEvent
+      const isOpen = te.newState === 'open'
+      setOpen(isOpen)
+      if (isOpen) {
+        const p = parseISO(valStr) ?? parseISO(todayISO)
+        if (p) setView({ y: p.y, m: p.m })
+      }
     }
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
-    const onScrollOrResize = () => computePos()
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    window.addEventListener('resize', onScrollOrResize)
-    window.addEventListener('scroll', onScrollOrResize, true)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-      window.removeEventListener('resize', onScrollOrResize)
-      window.removeEventListener('scroll', onScrollOrResize, true)
+    el.addEventListener('toggle', onToggle)
+    return () => el.removeEventListener('toggle', onToggle)
+  }, [valStr, todayISO])
+
+  const closePopover = () => {
+    try {
+      popRef.current?.hidePopover()
+    } catch {
+      setOpen(false)
     }
-  }, [open])
+    triggerRef.current?.focus()
+  }
 
   const emitChange = (nextISO: string) => {
     onChange?.({ target: { value: nextISO }, currentTarget: { value: nextISO } } as ChangeEvent<HTMLInputElement>)
@@ -141,26 +125,48 @@ export function DateInput({
     cells.push({ iso: toISO(ny, nm, d), day: d, inMonth: false })
   }
 
+  const onDayKeyDown = (e: KeyboardEvent<HTMLButtonElement>, idx: number) => {
+    const delta =
+      e.key === 'ArrowRight' ? 1
+        : e.key === 'ArrowLeft' ? -1
+          : e.key === 'ArrowDown' ? 7
+            : e.key === 'ArrowUp' ? -7
+              : 0
+    if (!delta) return
+    e.preventDefault()
+    const nextIdx = idx + delta
+    if (nextIdx >= 0 && nextIdx < cells.length) {
+      dayRefs.current[nextIdx]?.focus()
+    } else if (delta < 0) {
+      prevMonth()
+    } else {
+      nextMonth()
+    }
+  }
+
   const display = formatDisplayDate(valStr)
   const years = Array.from({ length: 16 }, (_, i) => view.y - 7 + i)
+  const describedBy = [hint ? `${id}-hint` : '', error ? `${id}-error` : ''].filter(Boolean).join(' ') || undefined
 
   return (
     <div className="space-y-1.5">
       {label && <label htmlFor={id} className="block text-xs font-bold uppercase tracking-wide text-fg-2">{label}</label>}
       {hint && <p id={`${id}-hint`} className="text-xs leading-snug text-muted">{hint}</p>}
       <div className="relative">
-        {icon && <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted [&>svg]:size-[18px]">{icon}</span>}
+        {icon && <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted [&>svg]:size-[18px]" aria-hidden="true">{icon}</span>}
         <button
           ref={triggerRef}
           id={id}
           type="button"
           disabled={disabled}
+          popoverTarget={popoverId}
           aria-label={ariaLabel ?? label ?? 'Seleccionar fecha'}
           aria-expanded={open}
-          aria-describedby={hint ? `${id}-hint` : undefined}
-          onClick={toggleOpen}
+          aria-invalid={error ? 'true' : 'false'}
+          aria-describedby={describedBy}
+          style={{ anchorName } as CSSProperties}
           className={clsx(
-            'flex h-12 w-full items-center justify-between rounded-xl border bg-card pr-3.5 text-left text-sm transition hover:border-line-strong focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25',
+            'flex min-h-12 w-full items-center justify-between rounded-xl border bg-card pr-3.5 text-left text-base transition hover:border-line-strong focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 sm:text-sm',
             icon ? 'pl-11' : 'pl-4',
             open ? 'border-primary ring-2 ring-primary/25' : error ? 'border-danger' : 'border-line',
             display ? 'font-medium text-fg' : 'text-muted',
@@ -168,147 +174,138 @@ export function DateInput({
           )}
         >
           <span className="truncate">{display || placeholder || 'dd/mm/aaaa'}</span>
-          <Calendar className={clsx('size-4 shrink-0 transition', open ? 'text-primary' : 'text-fg-2')} />
+          <Calendar aria-hidden="true" className={clsx('size-4 shrink-0 transition', open ? 'text-primary' : 'text-fg-2')} />
         </button>
-      </div>
-      {error && <p className="text-xs text-danger">{error}</p>}
 
-      {typeof document !== 'undefined' &&
-        createPortal(
-          <AnimatePresence>
-            {open && (
-              <motion.div
-                ref={popRef}
-                role="dialog"
-                aria-label="Calendario"
-                initial={{ opacity: 0, y: pos.placeUp ? 6 : -6, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: pos.placeUp ? 4 : -4, scale: 0.96 }}
-                transition={{ type: 'spring', stiffness: 420, damping: 30 }}
-                style={{
-                  position: 'fixed',
-                  top: pos.placeUp ? undefined : pos.top,
-                  bottom: pos.placeUp ? window.innerHeight - pos.top : undefined,
-                  left: pos.left,
-                }}
-                className="z-[120] w-72 select-none rounded-2xl border border-line-strong bg-elevated p-3.5 shadow-2xl shadow-black/45"
+        {/* Renderizado en Top Layer (popover="auto") dentro del subárbol para funcionar también dentro de <dialog>. */}
+        <div
+          ref={popRef}
+          id={popoverId}
+          {...({ popover: 'auto' } as Record<string, string>)}
+          role="dialog"
+          aria-label="Calendario"
+          style={{ positionAnchor: anchorName } as CSSProperties}
+          className="anchored-popover w-72 select-none"
+        >
+          <div className="rounded-2xl border border-line-strong bg-elevated p-3.5 shadow-2xl shadow-black/45">
+            {/* Encabezado mes / año */}
+            <div className="mb-3 flex items-center justify-between gap-1">
+              <button
+                type="button"
+                onClick={prevMonth}
+                aria-label="Mes anterior"
+                className="grid size-8 place-items-center rounded-lg text-fg-2 transition hover:bg-hover hover:text-fg active:scale-95"
               >
-                {/* Encabezado mes / año */}
-                <div className="mb-3 flex items-center justify-between gap-1">
-                  <button
-                    type="button"
-                    onClick={prevMonth}
-                    aria-label="Mes anterior"
-                    className="grid size-8 place-items-center rounded-lg text-fg-2 transition hover:bg-hover hover:text-fg active:scale-95"
-                  >
-                    <ChevronLeft className="size-4" />
-                  </button>
+                <ChevronLeft className="size-4" aria-hidden="true" />
+              </button>
 
-                  <div className="flex items-center gap-1.5">
-                    <select
-                      aria-label="Mes"
-                      value={view.m}
-                      onChange={e => setView(v => ({ ...v, m: Number(e.target.value) }))}
-                      className="cursor-pointer appearance-none rounded-lg bg-transparent px-1.5 py-1 text-center text-xs font-extrabold text-fg transition hover:bg-hover focus:outline-none"
-                    >
-                      {MESES.map((m, idx) => (
-                        <option key={m} value={idx} className="bg-card text-fg">{m}</option>
-                      ))}
-                    </select>
-                    <select
-                      aria-label="Año"
-                      value={view.y}
-                      onChange={e => setView(v => ({ ...v, y: Number(e.target.value) }))}
-                      className="cursor-pointer appearance-none rounded-lg bg-transparent px-1.5 py-1 text-center text-xs font-extrabold text-fg transition hover:bg-hover focus:outline-none"
-                    >
-                      {years.map(y => (
-                        <option key={y} value={y} className="bg-card text-fg">{y}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={nextMonth}
-                    aria-label="Mes siguiente"
-                    className="grid size-8 place-items-center rounded-lg text-fg-2 transition hover:bg-hover hover:text-fg active:scale-95"
-                  >
-                    <ChevronRight className="size-4" />
-                  </button>
-                </div>
-
-                {/* Días de la semana */}
-                <div className="mb-1.5 grid grid-cols-7 text-center">
-                  {DIAS_SEMANA.map(d => (
-                    <span key={d} className="py-1 text-[11px] font-bold uppercase tracking-wider text-muted">
-                      {d}
-                    </span>
+              <div className="flex items-center gap-1.5">
+                <select
+                  aria-label="Mes"
+                  value={view.m}
+                  onChange={e => setView(v => ({ ...v, m: Number(e.target.value) }))}
+                  className="cursor-pointer appearance-none rounded-lg bg-transparent px-1.5 py-1 text-center text-xs font-extrabold text-fg transition hover:bg-hover focus:outline-none"
+                >
+                  {MESES.map((m, idx) => (
+                    <option key={m} value={idx} className="bg-card text-fg">{m}</option>
                   ))}
-                </div>
+                </select>
+                <select
+                  aria-label="Año"
+                  value={view.y}
+                  onChange={e => setView(v => ({ ...v, y: Number(e.target.value) }))}
+                  className="cursor-pointer appearance-none rounded-lg bg-transparent px-1.5 py-1 text-center text-xs font-extrabold text-fg transition hover:bg-hover focus:outline-none"
+                >
+                  {years.map(y => (
+                    <option key={y} value={y} className="bg-card text-fg">{y}</option>
+                  ))}
+                </select>
+              </div>
 
-                {/* Cuadrícula de días */}
-                <div className="grid grid-cols-7 gap-1">
-                  {cells.map(c => {
-                    const selected = c.iso === valStr
-                    const isToday = c.iso === todayISO
-                    const disabledDay = isOut(c.iso)
-                    return (
-                      <button
-                        key={c.iso}
-                        type="button"
-                        disabled={disabledDay}
-                        onClick={() => {
-                          emitChange(c.iso)
-                          setOpen(false)
-                        }}
-                        className={clsx(
-                          'grid h-8 w-full place-items-center rounded-xl text-xs font-semibold transition active:scale-95',
-                          selected
-                            ? 'bg-primary font-bold text-white shadow-sm shadow-primary/30'
-                            : isToday
-                              ? 'border border-primary/50 bg-primary-soft font-bold text-primary'
-                              : c.inMonth
-                                ? 'text-fg hover:bg-hover'
-                                : 'text-muted/45 hover:bg-hover',
-                          disabledDay && 'pointer-events-none opacity-25',
-                        )}
-                      >
-                        {c.day}
-                      </button>
-                    )
-                  })}
-                </div>
+              <button
+                type="button"
+                onClick={nextMonth}
+                aria-label="Mes siguiente"
+                className="grid size-8 place-items-center rounded-lg text-fg-2 transition hover:bg-hover hover:text-fg active:scale-95"
+              >
+                <ChevronRight className="size-4" aria-hidden="true" />
+              </button>
+            </div>
 
-                {/* Pie del calendario */}
-                <div className="mt-3 flex items-center justify-between border-t border-line pt-2.5">
+            {/* Días de la semana */}
+            <div className="mb-1.5 grid grid-cols-7 text-center" aria-hidden="true">
+              {DIAS_SEMANA.map(d => (
+                <span key={d} className="py-1 text-[11px] font-bold uppercase tracking-wider text-muted">
+                  {d}
+                </span>
+              ))}
+            </div>
+
+            {/* Cuadrícula de días */}
+            <div className="grid grid-cols-7 gap-1">
+              {cells.map((c, idx) => {
+                const selected = c.iso === valStr
+                const isToday = c.iso === todayISO
+                const disabledDay = isOut(c.iso)
+                return (
                   <button
+                    key={c.iso}
+                    ref={el => { dayRefs.current[idx] = el }}
                     type="button"
+                    disabled={disabledDay}
+                    aria-pressed={selected}
+                    aria-label={formatDisplayDate(c.iso)}
+                    onKeyDown={e => onDayKeyDown(e, idx)}
                     onClick={() => {
-                      emitChange('')
-                      setOpen(false)
+                      emitChange(c.iso)
+                      closePopover()
                     }}
-                    className="rounded-lg px-2 py-1 text-xs font-semibold text-muted transition hover:bg-hover hover:text-danger"
+                    className={clsx(
+                      'grid h-8 w-full place-items-center rounded-xl text-xs font-semibold tabular-nums transition active:scale-95',
+                      selected
+                        ? 'bg-primary font-bold text-white shadow-sm shadow-primary/30'
+                        : isToday
+                          ? 'border border-primary/50 bg-primary-soft font-bold text-primary'
+                          : c.inMonth
+                            ? 'text-fg hover:bg-hover'
+                            : 'text-muted/45 hover:bg-hover',
+                      disabledDay && 'pointer-events-none opacity-25',
+                    )}
                   >
-                    Borrar
+                    {c.day}
                   </button>
-                  <button
-                    type="button"
-                    disabled={isOut(todayISO)}
-                    onClick={() => {
-                      emitChange(todayISO)
-                      setOpen(false)
-                    }}
-                    className="rounded-lg px-2.5 py-1 text-xs font-bold text-primary transition hover:bg-primary-soft disabled:opacity-40"
-                  >
-                    Hoy
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>,
-          document.body,
-        )}
+                )
+              })}
+            </div>
+
+            {/* Pie del calendario */}
+            <div className="mt-3 flex items-center justify-between border-t border-line pt-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  emitChange('')
+                  closePopover()
+                }}
+                className="rounded-lg px-2 py-1 text-xs font-semibold text-muted transition hover:bg-hover hover:text-danger"
+              >
+                Borrar
+              </button>
+              <button
+                type="button"
+                disabled={isOut(todayISO)}
+                onClick={() => {
+                  emitChange(todayISO)
+                  closePopover()
+                }}
+                className="rounded-lg px-2.5 py-1 text-xs font-bold text-primary transition hover:bg-primary-soft disabled:opacity-40"
+              >
+                Hoy
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      {error && <p id={`${id}-error`} className="text-xs text-danger">{error}</p>}
     </div>
   )
 }
-

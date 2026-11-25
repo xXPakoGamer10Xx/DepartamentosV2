@@ -130,7 +130,7 @@ export default function Pagos() {
       monto_desc: (a, b) => num(b.renta) - num(a.renta), monto_asc: (a, b) => num(a.renta) - num(b.renta),
       nombre: (a, b) => (a.nombre_completo || '').localeCompare(b.nombre_completo || ''),
     }
-    return [...f].sort((a, b) => cmp[sort](a.i, b.i))
+    return f.toSorted((a, b) => cmp[sort](a.i, b.i))
   }, [rows, tab, search, sort, saldos])
 
   const marcar = useMutation({
@@ -176,11 +176,11 @@ export default function Pagos() {
           <Card className="flex h-full flex-col justify-between p-4 transition duration-200 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Recaudado del mes</p>
-              <p className="mt-1 text-2xl font-extrabold tracking-tight text-success"><AnimatedNumber value={kpi.recaudado} format={money} /></p>
+              <p className="mt-1 text-2xl font-extrabold tracking-tight text-success tabular-nums"><AnimatedNumber value={kpi.recaudado} format={money} /></p>
             </div>
             <div className="mt-2">
-              <ProgressBar value={kpi.pct} />
-              <p className="mt-1 text-xs text-fg-2">{kpi.pct}% de {money(kpi.esperado)}</p>
+              <ProgressBar value={kpi.pct} label="Progreso de cobranza del mes" />
+              <p className="mt-1 text-xs text-fg-2 tabular-nums">{kpi.pct}% de {money(kpi.esperado)}</p>
             </div>
           </Card>
         </StaggerItem>
@@ -200,23 +200,23 @@ export default function Pagos() {
       </div>
 
       <StaggerItem className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-60 flex-1">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por inquilino o unidad…" aria-label="Buscar pagos"
-            className="h-11 w-full rounded-xl border border-line bg-card pl-10 pr-9 text-sm placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25" />
-          {search && <button onClick={() => setSearch('')} aria-label="Limpiar" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-fg"><X className="size-4" /></button>}
-        </div>
+        <search className="relative min-w-60 flex-1">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+          <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por inquilino o unidad…" aria-label="Buscar pagos" enterKeyHint="search"
+            className="min-h-11 w-full rounded-xl border border-line bg-card pl-10 pr-9 text-base placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 sm:text-sm" />
+          {search && <button type="button" onClick={() => setSearch('')} aria-label="Limpiar búsqueda" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-fg"><X className="size-4" aria-hidden="true" /></button>}
+        </search>
         <label className="relative flex w-full items-center sm:inline-flex sm:w-auto">
           <span className="sr-only">Ordenar por</span>
-          <ArrowUpDown className="pointer-events-none absolute left-3.5 size-4 text-muted" />
-          <select value={sort} onChange={e => setSort(e.target.value as Sort)} className="h-11 w-full cursor-pointer appearance-none rounded-xl border border-line bg-card pl-10 pr-10 text-sm font-semibold transition hover:border-line-strong focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25">
+          <ArrowUpDown className="pointer-events-none absolute left-3.5 size-4 text-muted" aria-hidden="true" />
+          <select value={sort} onChange={e => setSort(e.target.value as Sort)} className="min-h-11 w-full cursor-pointer appearance-none rounded-xl border border-line bg-card pl-10 pr-10 text-base font-semibold transition hover:border-line-strong focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 sm:text-sm">
             {SORTS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
-          <ChevronDown className="pointer-events-none absolute right-3.5 size-4 text-fg-2" />
+          <ChevronDown className="pointer-events-none absolute right-3.5 size-4 text-fg-2" aria-hidden="true" />
         </label>
       </StaggerItem>
 
-      <StaggerItem className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 sm:gap-2">
+      <StaggerItem className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 sm:gap-2">
         {TABS.map(t => {
           const active = tab === t.key
           return (

@@ -28,8 +28,8 @@ export function ConfirmDialog({ open, title, children, confirmLabel, loading, er
           <p role="alert" className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p>
         </ShakeError>
         <div className="grid grid-cols-2 gap-2.5 pt-1">
-          <Button variant="secondary" onClick={onClose} disabled={loading}>Cancelar</Button>
-          <Button variant={tone === 'danger' ? 'danger' : 'primary'} onClick={onConfirm} loading={loading}>{confirmLabel}</Button>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={loading} autoFocus={tone === 'danger'}>Cancelar</Button>
+          <Button type="button" variant={tone === 'danger' ? 'danger' : 'primary'} onClick={onConfirm} loading={loading}>{confirmLabel}</Button>
         </div>
       </div>
     </Modal>

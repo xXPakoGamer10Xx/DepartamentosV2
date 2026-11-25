@@ -6,9 +6,17 @@ export function Textarea({ label, error, className, ...rest }: TextareaHTMLAttri
   return (
     <div className="space-y-1.5">
       {label && <label htmlFor={id} className="block text-xs font-bold uppercase tracking-wide text-fg-2">{label}</label>}
-      <textarea {...rest} id={id}
-        className={clsx('min-h-28 w-full resize-none rounded-xl border bg-card p-4 text-sm text-fg placeholder:text-muted transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25', error ? 'border-danger' : 'border-line', className)} />
-      {error && <p className="text-xs text-danger">{error}</p>}
+      <textarea
+        {...rest}
+        id={id}
+        aria-invalid={error ? 'true' : 'false'}
+        aria-describedby={error ? `${id}-error` : undefined}
+        className={clsx(
+          'field-sizing-textarea min-h-28 w-full rounded-xl border bg-card p-4 text-base text-fg placeholder:text-muted transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 sm:text-sm',
+          error ? 'border-danger' : 'border-line', className,
+        )}
+      />
+      {error && <p id={`${id}-error`} className="text-xs text-danger">{error}</p>}
     </div>
   )
 }
