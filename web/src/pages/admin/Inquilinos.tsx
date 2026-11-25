@@ -76,13 +76,13 @@ export default function Inquilinos() {
       </div>
 
       <StaggerItem className="flex flex-wrap items-center gap-3">
-        <Segmented value={estado} onChange={setEstado} options={[{ value: 'activo', label: 'Activos' }, { value: 'inactivo', label: 'Archivados' }]} />
-        <div className="relative min-w-60 flex-1">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre, teléfono o depto…" aria-label="Buscar inquilinos"
-            className="h-11 w-full rounded-xl border border-line bg-card pl-10 pr-9 text-sm placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25" />
-          {search && <button onClick={() => setSearch('')} aria-label="Limpiar búsqueda" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-fg"><X className="size-4" /></button>}
-        </div>
+        <Segmented ariaLabel="Filtrar inquilinos por estado" value={estado} onChange={setEstado} options={[{ value: 'activo', label: 'Activos' }, { value: 'inactivo', label: 'Archivados' }]} />
+        <search className="relative min-w-60 flex-1">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+          <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre, teléfono o depto…" aria-label="Buscar inquilinos" enterKeyHint="search"
+            className="min-h-11 w-full rounded-xl border border-line bg-card pl-10 pr-9 text-base placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 sm:text-sm" />
+          {search && <button type="button" onClick={() => setSearch('')} aria-label="Limpiar búsqueda" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-fg"><X className="size-4" aria-hidden="true" /></button>}
+        </search>
       </StaggerItem>
 
       {isLoading && <div className="grid place-items-center py-20"><Spinner className="size-8" /></div>}
@@ -98,8 +98,9 @@ export default function Inquilinos() {
       {filtered.length > 0 && (
         <Card className="hidden overflow-hidden p-0 md:block">
           <table className="w-full text-left text-sm">
+            <caption className="sr-only">Lista de inquilinos {estado === 'activo' ? 'activos' : 'archivados'}</caption>
             <thead className="border-b border-line bg-hover/50 text-[11px] font-bold uppercase tracking-wide text-muted">
-              <tr><th className="px-5 py-3">Inquilino</th><th className="px-3 py-3">Unidad</th><th className="px-3 py-3">Renta</th><th className="px-3 py-3">Estado</th><th className="px-5 py-3 text-right">Acciones</th></tr>
+              <tr><th scope="col" className="px-5 py-3">Inquilino</th><th scope="col" className="px-3 py-3">Unidad</th><th scope="col" className="px-3 py-3">Renta</th><th scope="col" className="px-3 py-3">Estado</th><th scope="col" className="px-5 py-3 text-right">Acciones</th></tr>
             </thead>
             <tbody key={`${estado}-${search}`} className="divide-y divide-line">
               {filtered.map((i, idx) => {
@@ -110,19 +111,19 @@ export default function Inquilinos() {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: Math.min(idx * 0.03, 0.25), duration: 0.25 }}
-                    className="transition hover:bg-hover/40"
+                    className={`transition hover:bg-hover/40 ${idx >= 12 ? 'deferred-row' : ''}`}
                   >
-                    <td className="px-5 py-3">
+                    <th scope="row" className="px-5 py-3 font-normal">
                       <Link to={`/inquilinos/${i.id}`} className="flex items-center gap-3">
-                        <span className="relative grid size-10 shrink-0 place-items-center rounded-full bg-primary-soft text-sm font-bold text-primary">
+                        <span aria-hidden="true" className="relative grid size-10 shrink-0 place-items-center rounded-full bg-primary-soft text-sm font-bold text-primary">
                           {iniciales(i.nombre_completo)}
                           <span className={`absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-card ${activo ? 'bg-success' : 'bg-muted'}`} />
                         </span>
                         <span className="min-w-0"><span className="block truncate font-semibold">{nombreVisible(i.nombre_completo)}</span>{i.tel_arrendatario && <span className="text-xs text-muted">{i.tel_arrendatario}</span>}</span>
                       </Link>
-                    </td>
-                    <td className="px-3 py-3 font-semibold">Depto {i.depto_numero}</td>
-                    <td className="px-3 py-3"><span className="font-bold">{money(i.renta)}</span>{i.fecha_pago && <span className="block text-xs text-muted">Día {i.fecha_pago.match(/\d+/)?.[0] ?? i.fecha_pago}</span>}</td>
+                    </th>
+                    <td className="px-3 py-3 font-semibold tabular-nums">Depto {i.depto_numero}</td>
+                    <td className="px-3 py-3 tabular-nums"><span className="font-bold">{money(i.renta)}</span>{i.fecha_pago && <span className="block text-xs text-muted">Día {i.fecha_pago.match(/\d+/)?.[0] ?? i.fecha_pago}</span>}</td>
                     <td className="px-3 py-3"><span className="flex flex-wrap gap-1.5"><Badge tone={chip.tone}>{chip.label}</Badge>{activo && v?.expired && <Badge tone="danger">Contrato vencido</Badge>}</span>{v && !v.expired && <span className={`mt-1 block text-xs ${v.tone === 'warning' ? 'text-warning' : 'text-muted'}`}>{v.label}</span>}</td>
                     <td className="px-5 py-3"><div className="flex justify-end gap-1"><Acciones i={i} activo={activo} puedeEditar={puedeEditar} onBaja={() => { darDeBaja.reset(); setBaja(i) }} /></div></td>
                   </motion.tr>

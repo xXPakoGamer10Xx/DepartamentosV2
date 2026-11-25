@@ -12,6 +12,7 @@ import { Spinner } from '../../../components/ui/Spinner'
 import { useToast } from '../../../components/ui/Toast'
 import { api } from '../../../lib/api'
 import { leerDocx, pickDocx } from '../../../lib/file'
+import { safeSetHTML } from '../../../lib/safeHtml'
 import type { CampoPlantilla, VariableContrato } from '../../../lib/types'
 import { SIN_DATOS } from '../../../lib/vacio'
 import { VariableSelect } from './plantilla/VariableSelect'
@@ -99,12 +100,21 @@ export default function PlantillaAsistente() {
   useLayoutEffect(() => {
     const root = docRef.current
     if (!root || paso !== 'revisar') return
-    root.innerHTML = html
-    root.querySelectorAll<HTMLElement>('mark.auto').forEach(m => { m.dataset.label = etiqueta(m.dataset.var ?? ''); m.title = 'Este dato ya viene en tu Word' })
-    pintarMarcas(root, marcas, etiqueta)
-    // Párrafos que desaparecen porque otra marca los reemplaza (resto de una lista de inventario)
-    marcas.forEach(m => m.borrar?.forEach(id => root.querySelector<HTMLElement>(`[data-p="${id}"]`)?.classList.add('borrado')))
-    if (activa !== null) root.querySelectorAll(`mark[data-i="${activa}"]`).forEach(m => m.classList.add('activa'))
+    let cancelado = false
+    const renderDoc = async () => {
+      await safeSetHTML(root, html, {
+        elements: ['p', 'h2', 'mark', 'strong', 'em', 'span', 'br'],
+        attributes: ['class', 'data-p', 'data-var', 'data-ini', 'data-fin', 'data-i'],
+      })
+      if (cancelado) return
+      root.querySelectorAll<HTMLElement>('mark.auto').forEach(m => { m.dataset.label = etiqueta(m.dataset.var ?? ''); m.title = 'Este dato ya viene en tu Word' })
+      pintarMarcas(root, marcas, etiqueta)
+      // Párrafos que desaparecen porque otra marca los reemplaza (resto de una lista de inventario)
+      marcas.forEach(m => m.borrar?.forEach(id => root.querySelector<HTMLElement>(`[data-p="${id}"]`)?.classList.add('borrado')))
+      if (activa !== null) root.querySelectorAll(`mark[data-i="${activa}"]`).forEach(m => m.classList.add('activa'))
+    }
+    void renderDoc()
+    return () => { cancelado = true }
   }, [html, marcas, paso, etiqueta, activa])
 
   useEffect(() => {
@@ -254,7 +264,7 @@ export default function PlantillaAsistente() {
             <Card className="space-y-3 p-4">
               <h2 className="flex items-center justify-between text-xs font-bold uppercase tracking-wide text-fg-2">Datos detectados <span className="rounded-full bg-primary-soft px-2 py-0.5 text-primary">{marcas.length}</span></h2>
               {marcas.length === 0 && <p className="text-sm text-muted">Aún no hay datos marcados. Selecciona texto en el documento para empezar.</p>}
-              <ul className="custom-scrollbar max-h-[52vh] space-y-2.5 overflow-y-auto pr-1">
+              <ul className="custom-scrollbar max-h-[52dvh] space-y-2.5 overflow-y-auto pr-1">
                 {marcas.map((m, i) => (
                   <li id={`marca-${i}`} key={`${m.p}-${m.ini}`} onClick={() => setActiva(i)}
                     className={`space-y-2 rounded-xl border p-3.5 transition ${activa === i ? 'border-primary bg-primary-soft/50' : 'border-line hover:border-line-strong'}`}>
@@ -329,10 +339,10 @@ export default function PlantillaAsistente() {
             </div>
           </Card>
           <Card className="overflow-hidden p-0">
-            {probar.isPending && !preview && <div className="grid h-[70vh] place-items-center"><Spinner className="size-8" /></div>}
+            {probar.isPending && !preview && <div className="grid h-[70dvh] place-items-center"><Spinner className="size-8" /></div>}
             {preview && (
               <>
-                <iframe title="Vista previa del contrato" src={preview} className="hidden h-[78vh] w-full md:block" />
+                <iframe title="Vista previa del contrato" src={preview} className="hidden h-[78dvh] w-full md:block" />
                 <div className="grid place-items-center gap-3 p-8 text-center md:hidden">
                   <p className="text-sm text-fg-2">La vista previa se abre como PDF.</p>
                   <a href={preview} target="_blank" rel="noreferrer"><Button>Abrir vista previa</Button></a>

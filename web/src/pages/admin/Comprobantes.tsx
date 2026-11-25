@@ -80,7 +80,7 @@ export default function Comprobantes() {
       <Modal open={!!sel && !rechazando} title="Revisar comprobante" onClose={() => setSel(null)}>
         {sel && (
           <div className="space-y-4">
-            {sel.comprobante_url && <img src={sel.comprobante_url} alt="Comprobante" className="max-h-[55vh] w-full rounded-xl bg-hover object-contain" />}
+            {sel.comprobante_url && <img src={sel.comprobante_url} alt="Comprobante" className="max-h-[55dvh] w-full rounded-xl bg-hover object-contain" />}
             <div className="flex items-center justify-between text-sm">
               <span><Link to={`/pagos/${sel.inquilino_id}`} className="font-bold text-primary hover:underline">{nombreVisible(sel.nombre_completo)}</Link><span className="block text-fg-2">Depto {sel.depto_numero} · <span className="inline-block first-letter:uppercase">{periodoLabel(sel.periodo)}</span></span></span>
               <b className="text-lg">{money(sel.monto)}</b>

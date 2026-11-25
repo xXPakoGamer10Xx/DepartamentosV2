@@ -128,7 +128,7 @@ export default function InquilinoHome() {
             </div>
             {!pago?.confirmado && totalAbonado > 0 && (
               <div className="mt-4">
-                <ProgressBar value={Math.min(100, (totalAbonado / Math.max(num(pago?.monto), 1)) * 100)} tone="success" />
+                <ProgressBar value={Math.min(100, (totalAbonado / Math.max(num(pago?.monto), 1)) * 100)} tone="success" label="Progreso de abonos de renta" />
                 <p className="mt-1.5 text-xs text-fg-2">Abonado {money(totalAbonado)} · Saldo pendiente <b className="text-fg">{money(saldo)}</b></p>
               </div>
             )}

@@ -166,8 +166,9 @@ export function InventarioEditor({ items, onChange, disabled }: { items: string[
       </ul>
       {!disabled && (
         <div className="flex gap-2">
-          <input value={txt} onChange={e => setTxt(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }} placeholder="Ej. Refrigerador"
-            className="h-11 flex-1 rounded-xl border border-line bg-card px-4 text-sm placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25" />
+          <input value={txt} onChange={e => setTxt(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (e.nativeEvent.isComposing || e.keyCode === 229) return; add() } }} placeholder="Ej. Refrigerador"
+            aria-label="Nuevo artículo de inventario"
+            className="min-h-11 flex-1 rounded-xl border border-line bg-card px-4 text-base placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 sm:text-sm" />
           <Button type="button" variant="secondary" onClick={add} className="h-11">Agregar</Button>
         </div>
       )}

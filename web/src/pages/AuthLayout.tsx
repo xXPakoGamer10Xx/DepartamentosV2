@@ -1,13 +1,25 @@
 import { motion } from 'motion/react'
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { BrandLogo } from '../components/layout/BrandLogo'
 
 /** Marco común de login/registro: imagen de marca a la izquierda en escritorio, formulario a la derecha. */
 export function AuthLayout({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
+  useEffect(() => {
+    document.title = `${title} | NethRent`
+    return () => { document.title = 'NethRent' }
+  }, [title])
+
   return (
-    <div className="grid grid-cols-1 min-h-full lg:grid-cols-2">
+    <div className="grid min-h-full grid-cols-1 lg:grid-cols-2">
       <div className="relative hidden overflow-hidden lg:block">
-        <img src="/auth-bg.jpg" alt="" className="animate-ken-burns absolute inset-0 size-full object-cover" />
+        <img
+          src="/auth-bg.jpg"
+          alt=""
+          width={343}
+          height={512}
+          fetchPriority="high"
+          className="animate-ken-burns absolute inset-0 size-full object-cover"
+        />
         <div className="absolute inset-0 bg-gradient-to-br from-[#0E1321]/85 via-[#0E1321]/60 to-primary/40" />
         <div className="relative flex h-full flex-col justify-between p-12 text-white">
           <motion.div
@@ -29,7 +41,7 @@ export function AuthLayout({ title, subtitle, children }: { title: string; subti
         </div>
       </div>
 
-      <div className="safe-top safe-bottom flex items-center justify-center bg-bg px-5 py-10">
+      <main className="safe-top safe-bottom flex items-center justify-center bg-bg px-5 py-10">
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
@@ -41,7 +53,7 @@ export function AuthLayout({ title, subtitle, children }: { title: string; subti
           <p className="mb-7 mt-1.5 text-sm text-fg-2">{subtitle}</p>
           {children}
         </motion.div>
-      </div>
+      </main>
     </div>
   )
 }

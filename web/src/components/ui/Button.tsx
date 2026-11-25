@@ -23,11 +23,11 @@ export function Button({ variant = 'primary', loading, icon, full, className, ch
       {...rest}
       disabled={disabled || loading}
       className={clsx(
-        'inline-flex h-11 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-xl px-5 text-sm font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60',
+        'inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-xl px-5 py-2 text-sm font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60',
         styles[variant], full && 'w-full', className,
       )}
     >
-      {loading ? <Loader2 className="size-4 animate-spin" /> : icon}
+      {loading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : icon}
       {children}
     </button>
   )

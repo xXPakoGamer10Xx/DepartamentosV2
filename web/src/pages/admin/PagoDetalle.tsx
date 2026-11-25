@@ -323,7 +323,7 @@ export default function PagoDetalle() {
       <ConfirmDialog open={cancelar} title="Cancelar pago" confirmLabel="Cancelar pago" loading={cancelarPago.isPending} error={cancelarPago.error instanceof Error ? cancelarPago.error.message : null}
         onClose={() => setCancelar(false)} onConfirm={() => cancelarPago.mutate()}><p>El periodo volverá a quedar como pendiente y se eliminarán sus abonos.</p></ConfirmDialog>
       <Modal open={verComprobante} title="Comprobante de pago" onClose={() => setVerComprobante(false)}>
-        {pago?.comprobante_url && <img src={pago.comprobante_url} alt="Comprobante" className="max-h-[75vh] w-full rounded-xl object-contain" />}
+        {pago?.comprobante_url && <img src={pago.comprobante_url} alt="Comprobante" className="max-h-[75dvh] w-full rounded-xl object-contain" />}
       </Modal>
     </div>
   )

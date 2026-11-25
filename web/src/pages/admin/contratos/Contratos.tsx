@@ -141,15 +141,15 @@ function ListaContratos() {
       </div>
 
       <StaggerItem className="flex flex-wrap items-center gap-3">
-        <Segmented value={filtro} onChange={setFiltro} options={chips.map(c => ({ value: c.v, label: `${c.label} ${c.n}` }))} />
-        <div className="relative min-w-60 flex-1">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre o depto…" aria-label="Buscar contratos"
-            className="h-11 w-full rounded-xl border border-line bg-card pl-10 pr-9 text-sm placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25" />
-          {search && <button onClick={() => setSearch('')} aria-label="Limpiar búsqueda" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-fg"><X className="size-4" /></button>}
-        </div>
+        <Segmented ariaLabel="Filtrar contratos" value={filtro} onChange={setFiltro} options={chips.map(c => ({ value: c.v, label: `${c.label} ${c.n}` }))} />
+        <search className="relative min-w-60 flex-1">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+          <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre o depto…" aria-label="Buscar contratos" enterKeyHint="search"
+            className="min-h-11 w-full rounded-xl border border-line bg-card pl-10 pr-9 text-base placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 sm:text-sm" />
+          {search && <button type="button" onClick={() => setSearch('')} aria-label="Limpiar búsqueda" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-fg"><X className="size-4" aria-hidden="true" /></button>}
+        </search>
         <select value={orden} onChange={e => setOrden(e.target.value as Orden)} aria-label="Ordenar contratos"
-          className="h-11 w-full rounded-xl border border-line bg-card px-3 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 sm:w-auto">
+          className="min-h-11 w-full rounded-xl border border-line bg-card px-3 text-base focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 sm:w-auto sm:text-sm">
           {ORDENES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       </StaggerItem>
@@ -164,33 +164,34 @@ function ListaContratos() {
       {filtrados.length > 0 && (
         <Card className="hidden overflow-hidden p-0 md:block">
           <table className="w-full text-left text-sm">
+            <caption className="sr-only">Contratos de inquilinos activos</caption>
             <thead className="border-b border-line bg-hover/50 text-[11px] font-bold uppercase tracking-wide text-muted">
-              <tr><th className="px-5 py-3">Inquilino</th><th className="px-3 py-3">Vigencia</th><th className="px-3 py-3">Renta</th><th className="px-3 py-3">Contrato</th><th className="px-5 py-3 text-right">Acciones</th></tr>
+              <tr><th scope="col" className="px-5 py-3">Inquilino</th><th scope="col" className="px-3 py-3">Vigencia</th><th scope="col" className="px-3 py-3">Renta</th><th scope="col" className="px-3 py-3">Contrato</th><th scope="col" className="px-5 py-3 text-right">Acciones</th></tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {filtrados.map(i => {
+              {filtrados.map((i, idx) => {
                 const v = vencimiento(i.fecha_termino)
                 return (
-                  <tr key={i.id} className="transition hover:bg-hover/40">
-                    <td className="px-5 py-3">
+                  <tr key={i.id} className={`transition hover:bg-hover/40 ${idx >= 12 ? 'deferred-row' : ''}`}>
+                    <th scope="row" className="px-5 py-3 font-normal">
                       <Link to={`/inquilinos/${i.id}`} className="flex items-center gap-3">
-                        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary-soft text-sm font-bold text-primary">{iniciales(i.nombre_completo)}</span>
+                        <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-full bg-primary-soft text-sm font-bold text-primary">{iniciales(i.nombre_completo)}</span>
                         <span className="min-w-0"><span className="block truncate font-semibold">{nombreVisible(i.nombre_completo)}</span><span className="text-xs text-muted">Depto {i.depto_numero}</span></span>
                       </Link>
-                    </td>
-                    <td className="px-3 py-3"><span className="block">{fecha(i.fecha_inicio)} – {fecha(i.fecha_termino)}</span>{v && <Badge tone={v.tone}>{v.label}</Badge>}</td>
-                    <td className="px-3 py-3 font-bold">{money(i.renta)}</td>
+                    </th>
+                    <td className="px-3 py-3 tabular-nums"><span className="block">{fecha(i.fecha_inicio)} – {fecha(i.fecha_termino)}</span>{v && <Badge tone={v.tone}>{v.label}</Badge>}</td>
+                    <td className="px-3 py-3 font-bold tabular-nums">{money(i.renta)}</td>
                     <td className="px-3 py-3">{i.contrato_id
                       ? <span>{i.desactualizado ? <Badge tone="warning">Plantilla actualizada</Badge> : <Badge tone="success">Versión {i.version}</Badge>}<span className="mt-1 block text-xs text-muted">{i.plantilla_nombre} · {fecha(i.fecha_generacion)}</span></span>
                       : <Badge>Sin generar</Badge>}</td>
                     <td className="px-5 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        {i.contrato_id && <button onClick={() => bajar.mutate({ i, formato: 'docx' })} className="grid size-9 place-items-center rounded-lg text-fg-2 hover:bg-hover" aria-label="Descargar Word" title="Descargar Word"><Download className="size-[17px]" /></button>}
-                        {i.contrato_id && !i.desactualizado && <button onClick={() => setGenerar(i.id)} className="grid size-9 place-items-center rounded-lg text-fg-2 hover:bg-hover" aria-label="Generar de nuevo" title="Generar de nuevo"><FilePlus2 className="size-[17px]" /></button>}
-                        {i.contrato_id && i.desactualizado && <button onClick={() => bajar.mutate({ i, formato: 'pdf', ver: true })} className="grid size-9 place-items-center rounded-lg text-fg-2 hover:bg-hover" aria-label="Ver contrato anterior" title="Ver contrato anterior"><Eye className="size-[17px]" /></button>}
+                        {i.contrato_id && <button type="button" onClick={() => bajar.mutate({ i, formato: 'docx' })} className="grid size-9 place-items-center rounded-lg text-fg-2 hover:bg-hover" aria-label={`Descargar Word de ${nombreVisible(i.nombre_completo)}`} title="Descargar Word"><Download className="size-[17px]" aria-hidden="true" /></button>}
+                        {i.contrato_id && !i.desactualizado && <button type="button" onClick={() => setGenerar(i.id)} className="grid size-9 place-items-center rounded-lg text-fg-2 hover:bg-hover" aria-label={`Generar de nuevo el contrato de ${nombreVisible(i.nombre_completo)}`} title="Generar de nuevo"><FilePlus2 className="size-[17px]" aria-hidden="true" /></button>}
+                        {i.contrato_id && i.desactualizado && <button type="button" onClick={() => bajar.mutate({ i, formato: 'pdf', ver: true })} className="grid size-9 place-items-center rounded-lg text-fg-2 hover:bg-hover" aria-label={`Ver contrato anterior de ${nombreVisible(i.nombre_completo)}`} title="Ver contrato anterior"><Eye className="size-[17px]" aria-hidden="true" /></button>}
                         {i.contrato_id && !i.desactualizado
-                          ? <Button className="h-9 px-3.5" icon={<Eye className="size-4" />} onClick={() => bajar.mutate({ i, formato: 'pdf', ver: true })}>Ver contrato</Button>
-                          : <Button className="h-9 px-3.5" icon={<FilePlus2 className="size-4" />} onClick={() => setGenerar(i.id)}>Generar contrato</Button>}
+                          ? <Button type="button" className="min-h-9 px-3.5" icon={<Eye className="size-4" aria-hidden="true" />} onClick={() => bajar.mutate({ i, formato: 'pdf', ver: true })}>Ver contrato</Button>
+                          : <Button type="button" className="min-h-9 px-3.5" icon={<FilePlus2 className="size-4" aria-hidden="true" />} onClick={() => setGenerar(i.id)}>Generar contrato</Button>}
                       </div>
                     </td>
                   </tr>
