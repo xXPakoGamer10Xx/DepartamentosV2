@@ -107,4 +107,86 @@ public sealed class RecordatoriosTests(ApiFixture api)
         await SchedulerService.CheckPromesaPagoReminders();
         Assert.DoesNotContain(await Notas(a), n => n["tipo"]!.GetValue<string>() == "promesa");
     }
+
+    [Fact]
+    public async Task Deposito_con_saldo_pendiente_avisa_pero_ya_liquidado_no_avisa()
+    {
+        var (aPend, inqPend, _) = await Escenario(new
+        {
+            nombre_completo = "Deposito Pendiente",
+            depto_numero = 1,
+            renta = 3000,
+            deposito = 2000,
+            fecha_pago = "5",
+            fecha_inicio = DateTime.Today.AddMonths(-1).ToString("yyyy-MM-dd"),
+            fecha_termino = DateTime.Today.AddMonths(11).ToString("yyyy-MM-dd"),
+            deposito_tipo = "diferido_mensual",
+            deposito_fechas = new[] { Hoy },
+        });
+
+        var (aLiq, inqLiq, idLiq) = await Escenario(new
+        {
+            nombre_completo = "Deposito Liquidado",
+            depto_numero = 1,
+            renta = 3000,
+            deposito = 2000,
+            fecha_pago = "5",
+            fecha_inicio = DateTime.Today.AddMonths(-1).ToString("yyyy-MM-dd"),
+            fecha_termino = DateTime.Today.AddMonths(11).ToString("yyyy-MM-dd"),
+            deposito_tipo = "diferido_mensual",
+            deposito_fechas = new[] { Hoy },
+        });
+        Assert.Equal(HttpStatusCode.OK, (await aLiq.Post("/api/depositos/abono", new { inquilino_id = idLiq, monto = 2000 })).Status);
+
+        await SchedulerService.CheckDepositoReminders();
+
+        Assert.Contains(await Notas(inqPend), n => n["titulo"]!.GetValue<string>().Contains("depósito diferido"));
+        Assert.Contains(await Notas(aPend), n => n["mensaje"]!.GetValue<string>().Contains("depósito diferido"));
+
+        Assert.DoesNotContain(await Notas(inqLiq), n => n["titulo"]!.GetValue<string>().Contains("depósito diferido"));
+        Assert.DoesNotContain(await Notas(aLiq), n => n["mensaje"]!.GetValue<string>().Contains("depósito diferido"));
+    }
+
+    [Fact]
+    public async Task Deposito_semanal_no_avisa_a_3_dias_y_si_avisa_a_1_y_0_dias()
+    {
+        var enTresDias = DateTime.Now.AddDays(3).ToString("yyyy-MM-dd");
+        var manana = DateTime.Now.AddDays(1).ToString("yyyy-MM-dd");
+
+        var (a3, inq3, _) = await Escenario(new
+        {
+            nombre_completo = "Semanal 3 Dias",
+            depto_numero = 1,
+            renta = 3000,
+            deposito = 2000,
+            fecha_pago = "5",
+            fecha_inicio = DateTime.Today.AddMonths(-1).ToString("yyyy-MM-dd"),
+            fecha_termino = DateTime.Today.AddMonths(11).ToString("yyyy-MM-dd"),
+            deposito_tipo = "semanal",
+            deposito_monto_semanal = 1000,
+            deposito_fechas = new[] { enTresDias },
+        });
+
+        var (a1, inq1, _) = await Escenario(new
+        {
+            nombre_completo = "Semanal 1 Dia",
+            depto_numero = 1,
+            renta = 3000,
+            deposito = 2000,
+            fecha_pago = "5",
+            fecha_inicio = DateTime.Today.AddMonths(-1).ToString("yyyy-MM-dd"),
+            fecha_termino = DateTime.Today.AddMonths(11).ToString("yyyy-MM-dd"),
+            deposito_tipo = "semanal",
+            deposito_monto_semanal = 1000,
+            deposito_fechas = new[] { manana },
+        });
+
+        await SchedulerService.CheckDepositoReminders();
+
+        Assert.DoesNotContain(await Notas(inq3), n => n["titulo"]!.GetValue<string>().Contains("depósito"));
+        Assert.DoesNotContain(await Notas(a3), n => n["mensaje"]!.GetValue<string>().Contains("depósito"));
+
+        Assert.Contains(await Notas(inq1), n => n["mensaje"]!.GetValue<string>().Contains("vence mañana"));
+        Assert.Contains(await Notas(a1), n => n["mensaje"]!.GetValue<string>().Contains("Mañana vence el depósito"));
+    }
 }

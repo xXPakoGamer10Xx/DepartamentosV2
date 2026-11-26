@@ -1,6 +1,6 @@
 import { getToken, notifyUnauthorized } from './session'
 import type {
-  Abono, ApiResponse, BackupInfo, CampoPlantilla, CodigoInvitacion, Config, ContratoVersion, CuentaBancaria, CuotaExtra, Departamento,
+  Abono, AbonoSemanalResult, ApiResponse, BackupInfo, CampoPlantilla, CodigoInvitacion, Config, ContratoVersion, CuentaBancaria, CuotaExtra, Departamento,
   DepartamentosStats, Inquilino, LoginResult, Marca, Notificacion, Numeric, Pago, Plantilla, PlantillaDetalle, PlantillaNueva,
   PrepararContrato, ResumenContrato, ResumenDeuda, Ticket, User, VariableContrato,
 } from './types'
@@ -205,6 +205,8 @@ export const api = {
   getAbonosDeposito: (inquilinoId: string) => request<Abono[]>('GET', `/depositos/${inquilinoId}/abonos`),
   registrarAbonoDeposito: (d: { inquilino_id: string; monto: number; fecha?: string; metodo?: string; nota?: string; comprobante_url?: string }) =>
     request<{ abono: Abono; deposito_pagado: number; deposito_saldo: number }>('POST', '/depositos/abono', d),
+  registrarAbonoSemanal: (d: { inquilino_id: string; monto?: number; fecha?: string; metodo?: string; nota?: string; comprobante_url?: string }) =>
+    request<AbonoSemanalResult>('POST', '/depositos/abono-semanal', d),
   editarAbonoDeposito: (id: string, d: { monto?: number; fecha?: string; metodo?: string; nota?: string }) => request<{ abono: Abono }>('PUT', `/depositos/abono/${id}`, d),
   eliminarAbonoDeposito: (id: string) => request<void>('DELETE', `/depositos/abono/${id}`),
 

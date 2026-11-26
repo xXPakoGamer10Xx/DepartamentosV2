@@ -335,5 +335,42 @@ public sealed class SeguridadTests(ApiFixture api)
         // y el saldo del ajeno no cambió
         Assert.Equal(HttpStatusCode.OK, (await b.Post($"/api/pagos/marcar-pagado/{inqB}", new { periodo })).Status);
     }
+
+    [Fact]
+    public async Task Abono_semanal_exige_permiso_pagos_marcar_y_aislamiento_entre_propietarios()
+    {
+        var a = await api.RegisterAdmin();
+        var b = await api.RegisterAdmin();
+        await a.Post("/api/departamentos", new { numero = 1 });
+        var (stInq, bodyInq) = await a.Post("/api/inquilinos", new
+        {
+            nombre_completo = "Inquilino Seg Semanal",
+            depto_numero = 1,
+            renta = 3000,
+            deposito = 3000,
+            fecha_pago = "5",
+            fecha_inicio = DateTime.Today.ToString("yyyy-MM-dd"),
+            fecha_termino = DateTime.Today.AddMonths(12).ToString("yyyy-MM-dd"),
+            deposito_tipo = "semanal",
+            deposito_monto_semanal = 1000,
+        });
+        Assert.Equal(HttpStatusCode.Created, stInq);
+        var inqA = Str(bodyInq, "data", "id");
+
+        var cuentaInq = await api.InviteUser(a, "inquilino");
+        await a.Put($"/api/inquilinos/{inqA}/vincular-usuario", new { usuario_id = cuentaInq.Id });
+        var colabSinPermiso = await api.InviteUser(a, "cobrador", new[] { "pagos", "inquilinos" });
+        var colabConPermiso = await api.InviteUser(a, "cobrador", new[] { "pagos", "pagos.marcar" });
+
+        // Inquilino y colaborador sin pagos.marcar -> 403
+        Assert.Equal(HttpStatusCode.Forbidden, (await cuentaInq.Post("/api/depositos/abono-semanal", new { inquilino_id = inqA, monto = 500 })).Status);
+        Assert.Equal(HttpStatusCode.Forbidden, (await colabSinPermiso.Post("/api/depositos/abono-semanal", new { inquilino_id = inqA, monto = 500 })).Status);
+
+        // Otro propietario sobre inquilino ajeno -> 404
+        Assert.Equal(HttpStatusCode.NotFound, (await b.Post("/api/depositos/abono-semanal", new { inquilino_id = inqA, monto = 500 })).Status);
+
+        // Colaborador con pagos.marcar sobre inquilino propio -> 200
+        Assert.Equal(HttpStatusCode.OK, (await colabConPermiso.Post("/api/depositos/abono-semanal", new { inquilino_id = inqA, monto = 500 })).Status);
+    }
 }
 

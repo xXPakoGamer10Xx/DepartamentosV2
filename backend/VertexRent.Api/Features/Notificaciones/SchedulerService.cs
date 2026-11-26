@@ -164,6 +164,7 @@ public sealed class SchedulerService : BackgroundService
             foreach (var inq in inquilinos)
             {
                 if (inq.J("deposito_fechas") is not JsonArray fechas) continue;
+                var objetivoInq = inq.S("deposito_tipo") == "semanal" ? new[] { 1, 0 } : objetivo;
                 var hoy = DateTime.Now.Date;
 
                 foreach (var f in fechas)
@@ -173,7 +174,7 @@ public sealed class SchedulerService : BackgroundService
 
                     var target = DateTime.Parse(fechaStr + "T12:00:00", System.Globalization.CultureInfo.InvariantCulture).Date;
                     var restantes = (int)Math.Round((target - hoy).TotalDays);
-                    if (!objetivo.Contains(restantes)) continue;
+                    if (!objetivoInq.Contains(restantes)) continue;
 
                     var subKey = $"deposito_{inq.S("id")}_{fechaStr}_dias_{restantes}";
                     var depto = inq.S("depto_numero"); var nombre = inq.S("nombre_completo");

@@ -7,7 +7,8 @@ internal sealed record InquilinoDatos(
     object? Nombre, object? Depto, object? Renta, object? RentaLetra, object? Deposito, object? FechaPago,
     object? FechaInicio, object? FechaTermino, object? Fiador, object? Tel, object? TelFiador, object? Observaciones,
     string? Inventario, object? DepTipo, string DepFechas, object? Metodo,
-    string? Domicilio, string? Identificacion, string? EmailContacto, string? FiadorDomicilio, object? Estado = null);
+    string? Domicilio, string? Identificacion, string? EmailContacto, string? FiadorDomicilio,
+    object? Estado = null, object? DepMontoSemanal = null);
 
 /// <summary>Todo el SQL del módulo de inquilinos. Sin reglas de negocio ni HTTP.</summary>
 internal static class InquilinosRepository
@@ -89,41 +90,43 @@ internal static class InquilinosRepository
                 nombre_completo, depto_numero, renta, renta_letra, deposito, fecha_pago,
                 fecha_inicio, fecha_termino, fiador_nombre, tel_arrendatario,
                 fiador_telefono, observaciones, inventario, deposito_tipo, deposito_fechas,
-                metodo_pago, domicilio, identificacion, email_contacto, fiador_domicilio
-              ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+                metodo_pago, domicilio, identificacion, email_contacto, fiador_domicilio,
+                deposito_monto_semanal
+              ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
               RETURNING *",
             adminId, invitationToken, d.Nombre, d.Depto, d.Renta, d.RentaLetra, d.Deposito, d.FechaPago,
             d.FechaInicio, d.FechaTermino, d.Fiador, d.Tel, d.TelFiador, d.Observaciones, d.Inventario, d.DepTipo, d.DepFechas,
-            d.Metodo, d.Domicilio, d.Identificacion, d.EmailContacto, d.FiadorDomicilio)).First!;
+            d.Metodo, d.Domicilio, d.Identificacion, d.EmailContacto, d.FiadorDomicilio, d.DepMontoSemanal)).First!;
 
     public static async Task<Row> Actualizar(string adminId, string id, InquilinoDatos d) =>
         (await Db.Query(
             @"UPDATE inquilinos SET
-                nombre_completo   = $1,
-                depto_numero      = $2,
-                renta             = $3,
-                renta_letra       = $4,
-                deposito          = $5,
-                fecha_pago        = $6,
-                fecha_inicio      = $7,
-                fecha_termino     = $8,
-                fiador_nombre     = $9,
-                tel_arrendatario  = $10,
-                fiador_telefono   = $11,
-                observaciones     = $12,
-                inventario        = $13,
-                estado            = $14,
-                deposito_tipo     = $15,
-                deposito_fechas   = $16,
-                metodo_pago       = $17,
-                domicilio         = $20,
-                identificacion    = $21,
-                email_contacto    = $22,
-                fiador_domicilio  = $23
+                nombre_completo        = $1,
+                depto_numero           = $2,
+                renta                  = $3,
+                renta_letra            = $4,
+                deposito               = $5,
+                fecha_pago             = $6,
+                fecha_inicio           = $7,
+                fecha_termino          = $8,
+                fiador_nombre          = $9,
+                tel_arrendatario       = $10,
+                fiador_telefono        = $11,
+                observaciones          = $12,
+                inventario             = $13,
+                estado                 = $14,
+                deposito_tipo          = $15,
+                deposito_fechas        = $16,
+                metodo_pago            = $17,
+                domicilio              = $20,
+                identificacion         = $21,
+                email_contacto         = $22,
+                fiador_domicilio       = $23,
+                deposito_monto_semanal = $24
               WHERE admin_id = $18 AND id = $19 RETURNING *",
             d.Nombre, d.Depto, d.Renta, d.RentaLetra, d.Deposito, d.FechaPago, d.FechaInicio, d.FechaTermino,
             d.Fiador, d.Tel, d.TelFiador, d.Observaciones, d.Inventario, d.Estado, d.DepTipo, d.DepFechas, d.Metodo,
-            adminId, id, d.Domicilio, d.Identificacion, d.EmailContacto, d.FiadorDomicilio)).First!;
+            adminId, id, d.Domicilio, d.Identificacion, d.EmailContacto, d.FiadorDomicilio, d.DepMontoSemanal)).First!;
 
     /// <summary>Baja lógica: se conserva el historial.</summary>
     public static Task DarDeBaja(string adminId, string id) =>

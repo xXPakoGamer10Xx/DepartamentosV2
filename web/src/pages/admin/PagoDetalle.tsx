@@ -16,13 +16,13 @@ import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { detectBankInfo, getBankBrand } from '../../lib/bank'
 import { puedeCancelar } from '../../lib/cobranza'
+import { cuotaSugeridaDeposito, etiquetaModalidadDeposito, MONTO_SEMANAL_DEFAULT } from '../../lib/deposito'
 import { fecha, fechaHora, money, num, periodoLabel } from '../../lib/format'
 import { buildReciboHtml, imprimirHtml } from '../../lib/recibo'
 import { useSSE } from '../../lib/sse'
-import type { Abono } from '../../lib/types'
 import { nombreVisible } from '../../lib/nombre'
 import { Abonos } from './pago/Abonos'
-import { AbonoModal } from './pago/AbonoModal'
+import { AbonoModal, type AbonoModalState } from './pago/AbonoModal'
 import { RechazarModal } from './pago/RechazarModal'
 import { CuotaModal } from './pago/CuotaModal'
 import { Promesa } from './pago/Promesa'
@@ -36,7 +36,7 @@ export default function PagoDetalle() {
   const puedeMarcar = can('pagos.marcar')
   const esAdmin = user?.rol === 'admin'
 
-  const [abonoModal, setAbonoModal] = useState<{ tipo: 'renta' | 'deposito'; abono?: Abono; periodo?: string; saldo?: number } | null>(null)
+  const [abonoModal, setAbonoModal] = useState<AbonoModalState | null>(null)
   const [rechazar, setRechazar] = useState(false)
   const [cuotaModal, setCuotaModal] = useState(false)
   const [cancelar, setCancelar] = useState(false)
@@ -253,14 +253,58 @@ export default function PagoDetalle() {
 
           {/* Depósito */}
           <Card className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-wide text-fg-2">Depósito</h2>
-              {puedeMarcar && dep && dep.deposito_saldo > 0 && <Button variant="ghost" className="h-8 px-3" icon={<Plus className="size-4" />} onClick={() => setAbonoModal({ tipo: 'deposito' })}>Abono</Button>}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-xs font-bold uppercase tracking-wide text-fg-2">Depósito</h2>
+                {inq.deposito_tipo === 'contado_beneficio' && <Badge tone="success">Beneficio Mes 13</Badge>}
+              </div>
+              {puedeMarcar && dep && dep.deposito_saldo > 0 && (
+                inq.deposito_tipo === 'semanal' ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      className="min-h-10 px-3.5 text-xs sm:text-sm"
+                      icon={<HandCoins className="size-4" />}
+                      onClick={() => {
+                        const montoSem = num(inq.deposito_monto_semanal) || MONTO_SEMANAL_DEFAULT
+                        const saldoSem = saldoQ.data
+                          ? Math.min(montoSem, Math.max(saldoQ.data.deuda_total + dep.deposito_saldo, 0))
+                          : montoSem
+                        setAbonoModal({ tipo: 'semanal', saldo: saldoSem })
+                      }}
+                    >
+                      Pago semanal
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="min-h-10 px-3 text-xs sm:text-sm"
+                      icon={<Plus className="size-4" />}
+                      onClick={() => setAbonoModal({ tipo: 'deposito', saldo: dep.deposito_saldo })}
+                    >
+                      Abono directo
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    className="h-8 px-3"
+                    icon={<Plus className="size-4" />}
+                    onClick={() => {
+                      const sugerida = cuotaSugeridaDeposito(dep.deposito_total, dep.deposito_saldo, inq.deposito_tipo, inq.deposito_fechas)
+                      setAbonoModal({ tipo: 'deposito', saldo: sugerida > 0 ? sugerida : undefined })
+                    }}
+                  >
+                    Abono
+                  </Button>
+                )
+              )}
             </div>
             {dep && dep.deposito_total > 0 ? (
               <>
+                <p className="text-xs text-fg-2">
+                  {etiquetaModalidadDeposito(inq.deposito_tipo, inq.deposito_fechas?.length, inq.deposito_monto_semanal ? num(inq.deposito_monto_semanal) : null)}
+                </p>
                 <ProgressBar value={(dep.deposito_pagado / dep.deposito_total) * 100} tone="primary" />
-                <div className="grid grid-cols-3 text-center text-sm">
+                <div className="grid grid-cols-3 text-center text-sm tabular-nums">
                   <div><p className="text-xs text-fg-2">Total</p><b>{money(dep.deposito_total)}</b></div>
                   <div><p className="text-xs text-fg-2">Pagado</p><b className="text-success">{money(dep.deposito_pagado)}</b></div>
                   <div><p className="text-xs text-fg-2">Pendiente</p><b className={dep.deposito_saldo > 0 ? 'text-danger' : ''}>{money(dep.deposito_saldo)}</b></div>

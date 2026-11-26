@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, CalendarDays, CheckCircle2, Circle, Clock, CloudUpload, Home as HomeIcon, Info, MessageSquarePlus, QrCode, Receipt, RefreshCw, Send } from 'lucide-react'
+import { AlertTriangle, CalendarDays, CheckCircle2, Circle, Clock, CloudUpload, Home as HomeIcon, Info, MessageSquarePlus, QrCode, Receipt, RefreshCw, Send, Wallet } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import QRCode from 'qrcode'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
 import { AnimatedNumber } from '../../components/ui/AnimatedNumber'
+import { Badge } from '../../components/ui/Badge'
 import { BankCard3D } from '../../components/ui/BankCard3D'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
@@ -15,6 +16,7 @@ import { Spinner } from '../../components/ui/Spinner'
 import { useToast } from '../../components/ui/Toast'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
+import { etiquetaModalidadDeposito } from '../../lib/deposito'
 import { fechaHora, money, num, periodoLabel } from '../../lib/format'
 import { compressImage, pickImage } from '../../lib/image'
 import { useSSE } from '../../lib/sse'
@@ -36,8 +38,16 @@ export default function InquilinoHome() {
     enabled: !!inq?.id,
     refetchInterval: 15_000, // respaldo; los cambios llegan al instante por SSE
   })
+  const depositoQ = useQuery({
+    queryKey: ['deposito-saldo', inq?.id],
+    queryFn: async () => (await api.getSaldoDeposito(inq!.id)).data,
+    enabled: !!inq?.id,
+  })
 
-  const refresh = () => void qc.invalidateQueries({ queryKey: ['estado-pago'] })
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: ['estado-pago'] })
+    void qc.invalidateQueries({ queryKey: ['deposito-saldo'] })
+  }
   useSSE('payment_confirmed', () => {
     refresh()
     setCelebrate(true)
@@ -80,6 +90,7 @@ export default function InquilinoHome() {
   const esTransferencia = inq.metodo_pago === 'transferencia' || inq.metodo_pago === 'ambos'
   const esEfectivo = inq.metodo_pago === 'efectivo' || inq.metodo_pago === 'ambos'
   const periodo = estado.data?.periodo
+  const dep = depositoQ.data
 
   return (
     <div className="space-y-6">
@@ -177,6 +188,36 @@ export default function InquilinoHome() {
           <Card className="flex items-center gap-3 p-4 text-sm text-fg-2">
             <CalendarDays className="size-4 text-primary" /> Fecha de pago: <b className="text-fg">{inq.fecha_pago}</b>
           </Card>
+
+          {dep && dep.deposito_total > 0 && (
+            <Card className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Wallet className="size-4 text-primary" aria-hidden="true" />
+                  <h2 className="text-xs font-bold uppercase tracking-wide text-fg-2">Tu depósito</h2>
+                </div>
+                {inq.deposito_tipo === 'contado_beneficio' && <Badge tone="success">Beneficio Mes 13</Badge>}
+              </div>
+              <p className="text-xs font-medium text-fg-2">
+                {etiquetaModalidadDeposito(inq.deposito_tipo, inq.deposito_fechas?.length, inq.deposito_monto_semanal ? num(inq.deposito_monto_semanal) : null)}
+              </p>
+              <ProgressBar
+                value={(dep.deposito_pagado / Math.max(dep.deposito_total, 1)) * 100}
+                tone={dep.deposito_saldo <= 0 ? 'success' : 'primary'}
+                label="Progreso de pago del depósito"
+              />
+              <div className="grid grid-cols-3 gap-2 text-center text-sm tabular-nums">
+                <div><p className="text-xs text-fg-2">Total</p><b>{money(dep.deposito_total)}</b></div>
+                <div><p className="text-xs text-fg-2">Pagado</p><b className="text-success">{money(dep.deposito_pagado)}</b></div>
+                <div><p className="text-xs text-fg-2">Pendiente</p><b className={dep.deposito_saldo > 0 ? 'text-danger' : 'text-success'}>{money(dep.deposito_saldo)}</b></div>
+              </div>
+              {inq.deposito_tipo === 'contado_beneficio' && (
+                <p className="rounded-xl bg-success-soft px-3 py-2 text-xs text-success">
+                  Al cumplir el año y avisar con 15 días de anticipación, tu mes 13 se cubre con tu depósito.
+                </p>
+              )}
+            </Card>
+          )}
 
           <div className="space-y-3">
             <LinkRow to="/pagos" icon={<Receipt className="size-[18px]" />} label="Ver historial de pagos" primary />

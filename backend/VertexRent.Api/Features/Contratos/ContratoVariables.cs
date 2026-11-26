@@ -35,10 +35,13 @@ public static class ContratoVariables
 
         new("renta", "Renta mensual", GPagos, "4,500.00"),
         new("renta_letra", "Renta con letra", GPagos, "CUATRO MIL QUINIENTOS PESOS 00/100 M.N."),
-        new("deposito", "Depósito / compensación", GPagos, "4,500.00"),
+        new("deposito", "Depósito", GPagos, "4,500.00"),
         new("deposito_letra", "Depósito con letra", GPagos, "CUATRO MIL QUINIENTOS PESOS 00/100 M.N."),
         new("deposito_tipo", "Tipo de depósito", GPagos, "único"),
         new("deposito_fechas", "Fechas del depósito", GPagos, "01 de enero de 2025"),
+        new("deposito_modalidad", "Modalidad del depósito", GPagos, "Opción 3: Contado y beneficio (Mes 13)"),
+        new("deposito_desglose", "Desglose de pagos del depósito", GPagos, "Pago único de $4,500.00 al inicio del contrato"),
+        new("clausula_deposito", "Cláusula completa del depósito", GPagos, "El arrendatario cubrirá por concepto de depósito la cantidad de $4,500.00..."),
         new("fecha_pago", "Día de pago", GPagos, "01 de cada mes"),
         new("dia_pago_numero", "Día de pago (número)", GPagos, "1"),
         new("metodo_pago", "Forma de pago", GPagos, "transferencia"),
@@ -85,6 +88,15 @@ public static class ContratoVariables
         var nombre = data.Str("nombre_completo");
         var renta = data.Num("renta");
         var deposito = data.Num("deposito");
+        var rawTipo = data.Str("deposito_tipo", "ninguno").Trim().ToLowerInvariant();
+        var montoSemanal = data.Num("deposito_monto_semanal") ?? 1000m;
+        var fechasFormateadas = fechas
+            .Where(f => !string.IsNullOrWhiteSpace(f))
+            .Select(f => ContractFormat.LongDate(f, true))
+            .Where(f => f.Length > 0)
+            .ToList();
+        var (depTipoTexto, depModalidad, depDesglose, clausulaDeposito) =
+            ConstruirTextosDeposito(rawTipo, deposito, montoSemanal, fechas.Count, fechasFormateadas);
         var arrNombre = data.Str("arrendador_nombre");
         var direccionArr = data.Str("arrendador_direccion");
         var fechaPago = data.Str("fecha_pago");
@@ -126,8 +138,11 @@ public static class ContratoVariables
             ["deposito"] = Dinero(deposito),
             ["deposito_numero"] = data.Str("deposito"),
             ["deposito_letra"] = deposito is > 0 ? ContractFormat.MontoALetras(deposito.Value) : "",
-            ["deposito_tipo"] = data.Str("deposito_tipo", "ninguno"),
-            ["deposito_fechas"] = fechas.Count > 0 ? string.Join(", ", fechas.Select(f => ContractFormat.LongDate(f, true))) : "",
+            ["deposito_tipo"] = depTipoTexto,
+            ["deposito_fechas"] = fechasFormateadas.Count > 0 ? string.Join(", ", fechasFormateadas) : "",
+            ["deposito_modalidad"] = depModalidad,
+            ["deposito_desglose"] = depDesglose,
+            ["clausula_deposito"] = clausulaDeposito,
             ["fecha_pago"] = fechaPago,
             ["dia_pago_numero"] = diaPago.Success ? int.Parse(diaPago.Value).ToString() : "",
             ["metodo_pago"] = data.Str("metodo_pago", "efectivo"),
@@ -156,6 +171,94 @@ public static class ContratoVariables
             ["firma_fiador"] = !string.IsNullOrEmpty(fiador) ? fiador + (string.IsNullOrEmpty(data.S("fiador_telefono")) ? "" : $"\nTel: {data.S("fiador_telefono")}") + "\nFiador" : "",
         };
         return v;
+    }
+
+    static (string Tipo, string Modalidad, string Desglose, string Clausula) ConstruirTextosDeposito(
+        string rawTipo, decimal? deposito, decimal montoSemanal, int cantidadFechas, List<string> fechasFormateadas)
+    {
+        if (deposito is null or <= 0)
+        {
+            return (
+                "sin depósito",
+                "Sin depósito",
+                "No aplica",
+                "Es importante que al desocupar el departamento el arrendatario avise con un mínimo de 15 días naturales de anticipación. En el presente contrato no se pacta entrega de depósito."
+            );
+        }
+
+        var depTipoTexto = rawTipo switch
+        {
+            "contado_beneficio" => "contado y beneficio (mes 13)",
+            "diferido_mensual" or "personalizado" => cantidadFechas > 0
+                ? $"pago diferido en {cantidadFechas} mensualidades"
+                : "pago diferido en mensualidades",
+            "quincenal" or "quincenas" => "pago quincenal en 2 exhibiciones",
+            "semanal" => $"pago semanal (${Dinero(montoSemanal)} por semana)",
+            "fechas" => cantidadFechas > 0 ? $"en {cantidadFechas} fecha(s) acordada(s)" : "fechas acordadas",
+            _ => "pago único al inicio",
+        };
+
+        string modalidad;
+        string desglosePago;
+        switch (rawTipo)
+        {
+            case "diferido_mensual":
+            case "personalizado":
+            {
+                var n = Math.Max(cantidadFechas, 1);
+                var cuota = Math.Round(deposito.Value / n, 2, MidpointRounding.AwayFromZero);
+                modalidad = $"Opción 1: Pago diferido en {n} mensualidades";
+                desglosePago = $"en {n} parcialidades mensuales de ${Dinero(cuota)} M.N. adicionales a su renta mensual"
+                    + (fechasFormateadas.Count > 0 ? $", pagaderas los días: {string.Join(", ", fechasFormateadas)}" : "");
+                break;
+            }
+            case "quincenal":
+            {
+                var mitad = Math.Round(deposito.Value / 2m, 2, MidpointRounding.AwayFromZero);
+                modalidad = "Opción 2: Pago quincenal intercalado";
+                desglosePago = $"en 2 pagos quincenales intercalados de ${Dinero(mitad)} M.N. cada uno (a los 15 y 45 días del inicio del contrato)"
+                    + (fechasFormateadas.Count > 0 ? $", correspondientes al {string.Join(" y ", fechasFormateadas)}" : "");
+                break;
+            }
+            case "quincenas":
+            {
+                var mitad = Math.Round(deposito.Value / 2m, 2, MidpointRounding.AwayFromZero);
+                modalidad = "Pago en dos quincenas";
+                desglosePago = $"en 2 exhibiciones quincenales de ${Dinero(mitad)} M.N."
+                    + (fechasFormateadas.Count > 0 ? $" los días {string.Join(" y ", fechasFormateadas)}" : "");
+                break;
+            }
+            case "semanal":
+                modalidad = $"Opción 4: Pago semanal (${Dinero(montoSemanal)} por semana)";
+                desglosePago = $"mediante abonos semanales constantes de ${Dinero(montoSemanal)} M.N., con los cuales se cubre en primer lugar la renta mensual vigente y el excedente se acumula hasta completar el total del depósito";
+                break;
+            case "fechas":
+                modalidad = "Fechas personalizadas acordadas";
+                desglosePago = fechasFormateadas.Count > 0
+                    ? $"en {fechasFormateadas.Count} pago(s) en las fechas: {string.Join(", ", fechasFormateadas)}"
+                    : "en las fechas pactadas entre las partes";
+                break;
+            case "contado_beneficio":
+                modalidad = "Opción 3: Contado y beneficio (Mes 13)";
+                desglosePago = "en una sola exhibición de contado al inicio del presente contrato";
+                break;
+            default:
+                modalidad = "Pago único al inicio del contrato";
+                desglosePago = "en una sola exhibición de contado al inicio del presente contrato";
+                break;
+        }
+
+        var desgloseCapitalizado = char.ToUpper(desglosePago[0]) + desglosePago[1..];
+        var reglaMes13 = rawTipo == "contado_beneficio"
+            ? "Al haberse cubierto el primer mes de renta y el depósito de contado al inicio (Opción 3), únicamente si el arrendatario cumple íntegramente el plazo pactado en este contrato sin adeudos y avisa con al menos 15 días de anticipación que no desea renovar, el depósito fungirá en especie como pago de renta del mes 13, sin que en ningún caso proceda devolución en efectivo."
+            : "En la modalidad de pago elegida no aplica el beneficio de mes 13, por lo que el depósito no funge como renta de ningún mes ni al término del contrato.";
+
+        var clausula =
+            $"El arrendatario se obliga a cubrir por concepto de depósito la cantidad de ${Dinero(deposito)} ({ContractFormat.MontoALetras(deposito.Value)}), pagadera {desglosePago}. "
+            + "Para desocupar el departamento el arrendatario deberá notificar con un mínimo de 15 días naturales de anticipación. El monto entregado o abonado por concepto de depósito NO es reembolsable bajo ninguna circunstancia (ni al cumplir el contrato ni si se desocupa antes), por lo que en ninguna opción existe devolución de dinero en efectivo ni de abonos parciales. "
+            + reglaMes13;
+
+        return (depTipoTexto, modalidad, desgloseCapitalizado, clausula);
     }
 
     /// <summary>Datos de ejemplo para probar una plantilla sin un inquilino real.</summary>

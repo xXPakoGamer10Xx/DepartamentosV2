@@ -11,6 +11,7 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { Spinner } from '../../components/ui/Spinner'
 import { useToast } from '../../components/ui/Toast'
 import { api } from '../../lib/api'
+import { etiquetaModalidadDeposito } from '../../lib/deposito'
 import { abrirPdf, guardarBlob } from '../../lib/file'
 import { useAuth } from '../../lib/auth'
 import { fecha, fechaHora, iniciales, money, num } from '../../lib/format'
@@ -119,9 +120,31 @@ export default function InquilinoDetalle() {
 
         <Seccion titulo="Pagos y depósito" icon={<Wallet className="size-4" />}>
           <Fila label="Método de pago" value={inq.metodo_pago ? METODO[inq.metodo_pago] : '—'} />
-          <Fila label="Depósito" value={deposito > 0 ? money(deposito) : 'Sin depósito'} />
-          {deposito > 0 && <Fila label="Modalidad" value={inq.deposito_tipo === 'quincenas' ? 'Dos quincenas' : inq.deposito_tipo === 'personalizado' ? 'Pagos mensuales' : inq.deposito_tipo === 'fechas' ? 'Fechas personalizadas' : 'Al inicio del contrato'} />}
-          {!!inq.deposito_fechas?.length && <Fila label="Fechas" value={inq.deposito_fechas.map(f => fecha(f)).join(' · ')} />}
+          <Fila label="Depósito" value={<span className="tabular-nums">{deposito > 0 ? money(deposito) : 'Sin depósito'}</span>} />
+          {deposito > 0 && (
+            <Fila
+              label="Modalidad"
+              value={
+                <span className="inline-flex flex-wrap items-center justify-end gap-2">
+                  <span>{etiquetaModalidadDeposito(inq.deposito_tipo, inq.deposito_fechas?.length, inq.deposito_monto_semanal ? num(inq.deposito_monto_semanal) : null)}</span>
+                  {inq.deposito_tipo === 'contado_beneficio' && <Badge tone="success">Beneficio Mes 13</Badge>}
+                </span>
+              }
+            />
+          )}
+          {deposito > 0 && inq.deposito_tipo === 'semanal' && num(inq.deposito_monto_semanal) > 0 && (
+            <Fila label="Abono semanal pactado" value={<span className="tabular-nums">{money(inq.deposito_monto_semanal)} / semana</span>} />
+          )}
+          {!!inq.deposito_fechas?.length && (
+            <Fila
+              label="Fechas"
+              value={
+                inq.deposito_fechas.length > 6
+                  ? `${inq.deposito_fechas.slice(0, 3).map(f => fecha(f)).join(' · ')} · … · ${fecha(inq.deposito_fechas[inq.deposito_fechas.length - 1])} (${inq.deposito_fechas.length} fechas)`
+                  : inq.deposito_fechas.map(f => fecha(f)).join(' · ')
+              }
+            />
+          )}
         </Seccion>
 
         <Seccion titulo="Contacto" icon={<Phone className="size-4" />}>
@@ -179,8 +202,8 @@ function Seccion({ titulo, icon, children, className = '' }: { titulo: string; i
     </Card>
   )
 }
-const Fila = ({ label, value }: { label: string; value: string }) => (
-  <div className="flex justify-between gap-4 text-sm"><span className="text-fg-2">{label}</span><span className="text-right font-semibold">{value}</span></div>
+const Fila = ({ label, value }: { label: string; value: ReactNode }) => (
+  <div className="flex items-start justify-between gap-4 text-sm"><span className="shrink-0 text-fg-2">{label}</span><span className="text-right font-semibold">{value}</span></div>
 )
 const Dato = ({ label, value, strong, tone }: { label: string; value: string; strong?: boolean; tone?: string }) => (
   <div><p className="text-xs font-semibold text-fg-2">{label}</p><p className={`${strong ? 'text-xl font-extrabold' : 'font-bold'} ${tone ?? ''}`}>{value}</p></div>
