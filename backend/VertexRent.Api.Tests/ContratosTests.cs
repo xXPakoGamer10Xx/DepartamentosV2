@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Wordprocessing;
 
 namespace VertexRent.Api.Tests;
 
@@ -199,5 +202,76 @@ public sealed class ContratosTests(ApiFixture api)
         Assert.Equal(HttpStatusCode.Forbidden, (await con.Post("/api/contratos/plantillas", new { nombre = "X", archivoBase64 = Convert.ToBase64String(docx) })).Status); // subir plantillas: solo admin
         var otro = await api.RegisterAdmin();
         Assert.Equal(HttpStatusCode.NotFound, (await otro.Post($"/api/contratos/inquilino/{inq}/generar", new { })).Status);
+    }
+
+    static string LeerTextoDocx(byte[] bytes)
+    {
+        using var ms = new MemoryStream(bytes);
+        using var doc = WordprocessingDocument.Open(ms, false);
+        var body = doc.MainDocumentPart?.Document?.Body;
+        return body == null ? "" : string.Join("\n", body.Descendants<Paragraph>().Select(p => string.Concat(p.Descendants<Text>().Select(t => t.Text))));
+    }
+
+    async Task<string> GenerarYLeerDocx(string depositoTipo, object? extra = null)
+    {
+        var a = await api.RegisterAdmin();
+        await a.Post("/api/departamentos", new { numero = 1 });
+        var payload = new JsonObject
+        {
+            ["nombre_completo"] = "Inquilino Cláusula 10",
+            ["depto_numero"] = 1,
+            ["renta"] = 4500,
+            ["deposito"] = 4500,
+            ["fecha_pago"] = "5",
+            ["fecha_inicio"] = DateTime.Today.ToString("yyyy-MM-dd"),
+            ["fecha_termino"] = DateTime.Today.AddMonths(12).ToString("yyyy-MM-dd"),
+            ["domicilio"] = "Calle 1",
+            ["identificacion"] = "INE 123",
+            ["email_contacto"] = "x@y.test",
+            ["tel_arrendatario"] = "5512345678",
+            ["deposito_tipo"] = depositoTipo,
+        };
+        if (extra is JsonObject ex)
+            foreach (var kv in ex) payload[kv.Key] = kv.Value?.DeepClone();
+
+        var (st, inqRes) = await a.Post("/api/inquilinos", payload);
+        Assert.Equal(HttpStatusCode.Created, st);
+        var inqId = Str(inqRes, "data", "id");
+
+        var (sg, genRes) = await a.Post($"/api/contratos/inquilino/{inqId}/generar", new { });
+        Assert.Equal(HttpStatusCode.Created, sg);
+        var contratoId = Str(genRes, "data", "id");
+
+        var docxRes = await a.Http.GetAsync($"/api/contratos/{contratoId}/archivo?formato=docx");
+        Assert.Equal(HttpStatusCode.OK, docxRes.StatusCode);
+        return LeerTextoDocx(await docxRes.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task Contrato_docx_refleja_clausula_10_segun_modalidad_y_sin_variables_pendientes()
+    {
+        var contado = await GenerarYLeerDocx("contado_beneficio", new JsonObject { ["deposito_pagado_inicio"] = true });
+        Assert.DoesNotMatch(@"\{\{[^}]+\}\}", contado);
+        Assert.Contains("mes 13", contado, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("NO es reembolsable", contado);
+        Assert.DoesNotContain("no aplica el beneficio de mes 13", contado, StringComparison.OrdinalIgnoreCase);
+
+        var diferido = await GenerarYLeerDocx("diferido_mensual", new JsonObject
+        {
+            ["deposito_fechas"] = new JsonArray("2026-02-05", "2026-03-05", "2026-04-05"),
+        });
+        Assert.DoesNotMatch(@"\{\{[^}]+\}\}", diferido);
+        Assert.Contains("no aplica el beneficio de mes 13", diferido, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("NO es reembolsable", diferido);
+
+        var semanal = await GenerarYLeerDocx("semanal", new JsonObject
+        {
+            ["deposito_monto_semanal"] = 1250,
+            ["deposito_fechas"] = new JsonArray("2026-02-05"),
+        });
+        Assert.DoesNotMatch(@"\{\{[^}]+\}\}", semanal);
+        Assert.Contains("no aplica el beneficio de mes 13", semanal, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("NO es reembolsable", semanal);
+        Assert.Contains("1,250.00", semanal);
     }
 }

@@ -72,6 +72,7 @@ export interface Inquilino {
   usuario_id: string | null
   deposito_tipo: string | null
   deposito_fechas: string[] | null
+  deposito_monto_semanal?: Numeric | null
   metodo_pago: 'efectivo' | 'transferencia' | 'ambos' | null
   plantilla_id?: string | null
   domicilio?: string | null
@@ -105,6 +106,14 @@ export interface Pago {
 export interface Abono {
   id: string; pago_id: string; monto: Numeric; fecha: string; metodo: string
   nota: string | null; tiene_comprobante?: boolean; registrado_por_nombre?: string | null; created_at: string
+}
+
+export interface AbonoSemanalResult {
+  aplicado_renta: { periodo: string; monto: number; completo: boolean }[]
+  total_aplicado_renta: number
+  aplicado_deposito: number
+  deposito_pagado: number
+  deposito_saldo: number
 }
 
 export interface CuentaBancaria {

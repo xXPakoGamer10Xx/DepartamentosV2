@@ -101,6 +101,123 @@ public sealed class DepositosCuotasTests(ApiFixture api)
         Assert.True(await EsperarNotificacion(cuenta, n => n["titulo"]!.GetValue<string>().Contains("depósito")), "no llegó el aviso del abono");
     }
 
+    [Fact]
+    public async Task Alta_contado_beneficio_con_pagado_inicio_liquida_deposito_y_crea_abono()
+    {
+        var a = await api.RegisterAdmin();
+        await a.Post("/api/departamentos", new { numero = 1 });
+        var (st, created) = await a.Post("/api/inquilinos", new
+        {
+            nombre_completo = "Inquilino Contado",
+            depto_numero = 1,
+            renta = 3500,
+            deposito = 3500,
+            fecha_pago = "5",
+            fecha_inicio = DateTime.Today.ToString("yyyy-MM-dd"),
+            fecha_termino = DateTime.Today.AddMonths(12).ToString("yyyy-MM-dd"),
+            deposito_tipo = "contado_beneficio",
+            deposito_pagado_inicio = true,
+        });
+        Assert.Equal(HttpStatusCode.Created, st);
+        var inq = created!["data"]!["id"]!.GetValue<string>();
+
+        var (_, saldo) = await a.Get($"/api/depositos/{inq}/saldo");
+        Assert.Equal(3500m, D(saldo!["data"]!["deposito_total"]));
+        Assert.Equal(3500m, D(saldo["data"]!["deposito_pagado"]));
+        Assert.Equal(0m, D(saldo["data"]!["deposito_saldo"]));
+
+        var (_, abonosRes) = await a.Get($"/api/depositos/{inq}/abonos");
+        var abonos = abonosRes!["data"]!.AsArray();
+        Assert.Single(abonos);
+        Assert.Equal(3500m, D(abonos[0]!["monto"]));
+    }
+
+    [Fact]
+    public async Task Abono_semanal_cubre_renta_mas_antigua_luego_actual_y_manda_excedente_a_deposito()
+    {
+        var a = await api.RegisterAdmin();
+        await a.Post("/api/departamentos", new { numero = 1 });
+        var prevMes = DateTime.Today.AddMonths(-1);
+        var prevPeriodo = prevMes.ToString("yyyy-MM");
+        var currPeriodo = DateTime.Today.ToString("yyyy-MM");
+
+        var (stInq, created) = await a.Post("/api/inquilinos", new
+        {
+            nombre_completo = "Inquilino Semanal",
+            depto_numero = 1,
+            renta = 1200,
+            deposito = 1000,
+            fecha_pago = "5",
+            fecha_inicio = prevMes.ToString("yyyy-MM-dd"),
+            fecha_termino = DateTime.Today.AddMonths(11).ToString("yyyy-MM-dd"),
+            deposito_tipo = "semanal",
+            deposito_monto_semanal = 1000,
+        });
+        Assert.Equal(HttpStatusCode.Created, stInq);
+        var inq = created!["data"]!["id"]!.GetValue<string>();
+
+        // a) Sin monto explícito usa deposito_monto_semanal (1000) y cubre primero el mes más antiguo (prevPeriodo)
+        var (st1, r1) = await a.Post("/api/depositos/abono-semanal", new { inquilino_id = inq });
+        Assert.Equal(HttpStatusCode.OK, st1);
+        Assert.Equal(1000m, D(r1!["data"]!["total_aplicado_renta"]));
+        Assert.Equal(0m, D(r1["data"]!["aplicado_deposito"]));
+        Assert.Equal(1000m, D(r1["data"]!["deposito_saldo"]));
+        var apl1 = r1["data"]!["aplicado_renta"]!.AsArray();
+        Assert.Single(apl1);
+        Assert.Equal(prevPeriodo, apl1[0]!["periodo"]!.GetValue<string>());
+        Assert.Equal(1000m, D(apl1[0]!["monto"]));
+        Assert.False(apl1[0]!["completo"]!.GetValue<bool>());
+
+        // a2) Segundo pago (1000) liquida los 200 restantes de prevPeriodo y abona 800 a currPeriodo
+        var (st2, r2) = await a.Post("/api/depositos/abono-semanal", new { inquilino_id = inq, monto = 1000 });
+        Assert.Equal(HttpStatusCode.OK, st2);
+        Assert.Equal(1000m, D(r2!["data"]!["total_aplicado_renta"]));
+        Assert.Equal(0m, D(r2["data"]!["aplicado_deposito"]));
+        var apl2 = r2["data"]!["aplicado_renta"]!.AsArray();
+        Assert.Equal(2, apl2.Count);
+        Assert.Equal(prevPeriodo, apl2[0]!["periodo"]!.GetValue<string>());
+        Assert.Equal(200m, D(apl2[0]!["monto"]));
+        Assert.True(apl2[0]!["completo"]!.GetValue<bool>());
+        Assert.Equal(currPeriodo, apl2[1]!["periodo"]!.GetValue<string>());
+        Assert.Equal(800m, D(apl2[1]!["monto"]));
+        Assert.False(apl2[1]!["completo"]!.GetValue<bool>());
+
+        // b) Pago de 700 rebasa los 400 pendientes de renta -> confirma renta actual y manda 300 exactos a abonos_deposito
+        var (st3, r3) = await a.Post("/api/depositos/abono-semanal", new { inquilino_id = inq, monto = 700 });
+        Assert.Equal(HttpStatusCode.OK, st3);
+        Assert.Equal(400m, D(r3!["data"]!["total_aplicado_renta"]));
+        Assert.Equal(300m, D(r3["data"]!["aplicado_deposito"]));
+        Assert.Equal(300m, D(r3["data"]!["deposito_pagado"]));
+        Assert.Equal(700m, D(r3["data"]!["deposito_saldo"]));
+
+        var (_, estadoActual) = await a.Get($"/api/pagos/estado/{inq}");
+        Assert.True(estadoActual!["data"]!["confirmado"]!.GetValue<bool>());
+        Assert.Equal(0m, D(estadoActual["saldo_pendiente"]));
+
+        // d) Rechaza 400 si supera deuda_renta (0) + deposito_saldo (700)
+        Assert.Equal(HttpStatusCode.BadRequest, (await a.Post("/api/depositos/abono-semanal", new { inquilino_id = inq, monto = 701 })).Status);
+
+        // c) Con renta ya cubierta manda 100% a abonos_deposito
+        var (st4, r4) = await a.Post("/api/depositos/abono-semanal", new { inquilino_id = inq, monto = 500 });
+        Assert.Equal(HttpStatusCode.OK, st4);
+        Assert.Empty(r4!["data"]!["aplicado_renta"]!.AsArray());
+        Assert.Equal(0m, D(r4["data"]!["total_aplicado_renta"]));
+        Assert.Equal(500m, D(r4["data"]!["aplicado_deposito"]));
+        Assert.Equal(800m, D(r4["data"]!["deposito_pagado"]));
+        Assert.Equal(200m, D(r4["data"]!["deposito_saldo"]));
+
+        var (st5, r5) = await a.Post("/api/depositos/abono-semanal", new { inquilino_id = inq, monto = 200 });
+        Assert.Equal(HttpStatusCode.OK, st5);
+        Assert.Equal(200m, D(r5!["data"]!["aplicado_deposito"]));
+        Assert.Equal(0m, D(r5["data"]!["deposito_saldo"]));
+
+        var (_, abonosDep) = await a.Get($"/api/depositos/{inq}/abonos");
+        Assert.Equal(3, abonosDep!["data"]!.AsArray().Count);
+
+        // d2) Rechaza 400 cuando ya está todo cubierto (renta + depósito)
+        Assert.Equal(HttpStatusCode.BadRequest, (await a.Post("/api/depositos/abono-semanal", new { inquilino_id = inq, monto = 100 })).Status);
+    }
+
     // ── Cuotas extra ─────────────────────────────────────────────────────────
     [Fact]
     public async Task Cuotas_son_solo_para_el_admin()

@@ -15,6 +15,34 @@ public static class InquilinosService
     /// <summary>Primer valor "con contenido" entre varias claves (el front envía snake_case o camelCase).</summary>
     static JsonNode? Primero(JsonObject b, params string[] keys) => Js.Or(keys.Select(k => b[k]).ToArray());
 
+    /// <summary>Resuelve el monto semanal pactado: solo aplica cuando la modalidad es "semanal" (default $1,000.00).</summary>
+    static decimal? ResolverMontoSemanal(string? depTipo, JsonObject b, decimal? actual = null)
+    {
+        if (depTipo != "semanal") return null;
+        JsonNode? raw = null;
+        foreach (var k in new[] { "deposito_monto_semanal", "depositoMontoSemanal" })
+        {
+            if (b.TryGetPropertyValue(k, out var v) && v is not null && !string.IsNullOrWhiteSpace(Js.Str(v)))
+            {
+                raw = v;
+                break;
+            }
+        }
+        if (raw is null) return actual is > 0m ? actual : 1000m;
+        var parsed = Js.ParseFloat(raw);
+        if (double.IsNaN(parsed) || double.IsInfinity(parsed) || parsed <= 0)
+            throw new AppError("El monto semanal debe ser mayor a 0", 400);
+        return Math.Round((decimal)parsed, 2, MidpointRounding.AwayFromZero);
+    }
+
+    static bool EsBoolTrue(JsonObject b, params string[] keys)
+    {
+        foreach (var k in keys)
+            if (b[k] is JsonValue v && v.TryGetValue<bool>(out var flag) && flag)
+                return true;
+        return false;
+    }
+
     // ── Consultas ────────────────────────────────────────────────────────────
     public static Task<Row?> MiDepto(AuthUser u) => InquilinosRepository.MiDepto(u.Id);
 
@@ -28,6 +56,8 @@ public static class InquilinosService
     public static async Task<Row> Crear(AuthUser u, string? ip, JsonObject b)
     {
         var depTipo = Js.T(Primero(b, "deposito_tipo", "depositoTipo")) ? Primero(b, "deposito_tipo", "depositoTipo") : JsonValue.Create("ninguno");
+        var depTipoStr = Js.Str(depTipo) ?? "ninguno";
+        var depMontoSemanal = ResolverMontoSemanal(depTipoStr, b);
         var depFechas = Js.T(Primero(b, "deposito_fechas", "depositoFechas")) ? Primero(b, "deposito_fechas", "depositoFechas")! : new JsonArray();
         var metodo = Js.T(Primero(b, "metodo_pago", "metodoPago")) ? Primero(b, "metodo_pago", "metodoPago") : JsonValue.Create("efectivo");
 
@@ -57,7 +87,21 @@ public static class InquilinosService
             Inventario: (Js.T(b["inventario"]) ? b["inventario"]! : new JsonArray()).ToJsonString(),
             DepTipo: depTipo, DepFechas: depFechas.ToJsonString(), Metodo: metodo,
             Domicilio: Texto(b, "domicilio"), Identificacion: Texto(b, "identificacion"),
-            EmailContacto: Texto(b, "email_contacto"), FiadorDomicilio: Texto(b, "fiador_domicilio")));
+            EmailContacto: Texto(b, "email_contacto"), FiadorDomicilio: Texto(b, "fiador_domicilio"),
+            DepMontoSemanal: depMontoSemanal));
+
+        if (EsBoolTrue(b, "deposito_pagado_inicio", "depositoPagadoInicio") && creado.D("deposito") > 0m)
+        {
+            await DepositosRepository.Insertar(
+                null,
+                creado.S("id")!,
+                creado.D("deposito"),
+                Inputs.Fecha(fechaInicio, "fecha_inicio"),
+                creado.S("metodo_pago") ?? "efectivo",
+                "Depósito de contado al inicio (Opción 3)",
+                null,
+                u.Actor);
+        }
 
         await InquilinosRepository.SetEstadoDepartamento(u.Id, Js.Str(depto), "ocupado");
         await Audit.Log(u, ip, "inquilinos", "crear", creado.S("id")!, null, creado);
@@ -79,6 +123,11 @@ public static class InquilinosService
             ? (Js.T(b["observaciones"]) ? Js.Str(b["observaciones"]) : "")
             : cur.S("observaciones");
 
+        var depTipoFinal = Preferir(Or("deposito_tipo", "depositoTipo"), string.IsNullOrEmpty(cur.S("deposito_tipo")) ? "ninguno" : cur.S("deposito_tipo"));
+        var depTipoFinalStr = depTipoFinal is JsonNode depNode ? Js.Str(depNode) : depTipoFinal as string;
+        var depMontoActual = cur.D("deposito_monto_semanal");
+        var depMontoSemanal = ResolverMontoSemanal(depTipoFinalStr, b, depMontoActual > 0m ? depMontoActual : null);
+
         var actualizado = await InquilinosRepository.Actualizar(u.Id, id, new InquilinoDatos(
             Nombre: Js.TitleCase(Js.Str(Or("nombre_completo", "nombre")) ?? cur.S("nombre_completo")),
             Depto: Preferir(Or("depto_numero", "depto"), cur.S("depto_numero")),
@@ -93,12 +142,13 @@ public static class InquilinosService
             TelFiador: Preferir(Or("fiador_telefono", "telFiador"), cur.S("fiador_telefono")),
             Observaciones: observaciones,
             Inventario: b.ContainsKey("inventario") ? (b["inventario"]?.ToJsonString() ?? "null") : cur.J("inventario")?.ToJsonString(),
-            DepTipo: Preferir(Or("deposito_tipo", "depositoTipo"), string.IsNullOrEmpty(cur.S("deposito_tipo")) ? "ninguno" : cur.S("deposito_tipo")),
+            DepTipo: depTipoFinal,
             DepFechas: (Js.T(Or("deposito_fechas", "depositoFechas")) ? Or("deposito_fechas", "depositoFechas")! : (cur.J("deposito_fechas") ?? new JsonArray())).ToJsonString(),
             Metodo: Preferir(Or("metodo_pago", "metodoPago"), string.IsNullOrEmpty(cur.S("metodo_pago")) ? "efectivo" : cur.S("metodo_pago")),
             Domicilio: TextoUpd(b, "domicilio", cur), Identificacion: TextoUpd(b, "identificacion", cur),
             EmailContacto: TextoUpd(b, "email_contacto", cur), FiadorDomicilio: TextoUpd(b, "fiador_domicilio", cur),
-            Estado: b["estado"] is null ? cur.S("estado") : b["estado"]));
+            Estado: b["estado"] is null ? cur.S("estado") : b["estado"],
+            DepMontoSemanal: depMontoSemanal));
 
         // Si cambió la renta, el mes actual y los siguientes sin pagar toman la nueva (los atrasados conservan la anterior).
         if (cur.D("renta") != actualizado.D("renta"))

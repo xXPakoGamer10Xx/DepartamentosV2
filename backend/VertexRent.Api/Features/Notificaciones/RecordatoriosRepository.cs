@@ -30,8 +30,10 @@ internal static class RecordatoriosRepository
 
     public static async Task<List<Row>> InquilinosConDepositoDiferido() =>
         (await Db.Query(
-            @"SELECT i.id, i.usuario_id, i.deposito_fechas, i.nombre_completo, i.depto_numero, i.admin_id
-              FROM inquilinos i WHERE i.estado = 'activo'")).Rows;
+            @"SELECT i.id, i.usuario_id, i.deposito_tipo, i.deposito_fechas, i.nombre_completo, i.depto_numero, i.admin_id
+              FROM inquilinos i
+              WHERE i.estado = 'activo'
+                AND (i.deposito <= 0 OR i.deposito > COALESCE((SELECT SUM(ad.monto) FROM abonos_deposito ad WHERE ad.inquilino_id = i.id), 0) + 0.005)")).Rows;
 
     public static async Task<List<Row>> PromesasPendientes() =>
         (await Db.Query(
