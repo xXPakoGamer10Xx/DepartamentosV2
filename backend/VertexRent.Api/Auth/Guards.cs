@@ -40,7 +40,7 @@ public static class Guards
     /// La sesión solo vale mientras el usuario siga activo y no haya cambiado su contraseña o rol (token_version).
     /// Devuelve su fila actual: rol y propietario se toman de la base de datos, no de lo que diga el token.
     /// </summary>
-    static async Task<Row> SesionVigente(string userId, JsonObject payload)
+    internal static async Task<Row> SesionVigente(string userId, JsonObject payload)
     {
         if (!Guid.TryParse(userId, out _)) throw new AppError("Token inválido o expirado", 401);
         var row = (await Db.Query("SELECT activo, token_version, rol, admin_id FROM usuarios WHERE id = $1", userId)).First;
@@ -140,7 +140,10 @@ public static class Guards
         var raw = c.Request.Query["ticket"].ToString();
         var p = Jwt.Verify(string.IsNullOrEmpty(raw) ? null : raw) ?? throw new AppError("Boleto inválido o expirado", 401);
         if (Js.Str(p["scope"]) != "sse_ticket") throw new AppError("Boleto inválido o expirado", 401);
-        c.Items["__user"] = FromPayload(p);
+        var user = FromPayload(p);
+        // El boleto dura 60 s, pero solo vale si el usuario sigue activo y no cambió su contraseña o rol.
+        user.Rol = (await SesionVigente(user.Id, p)).S("rol") ?? "";
+        c.Items["__user"] = user;
         return await next(ctx);
     });
 

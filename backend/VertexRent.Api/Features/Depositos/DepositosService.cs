@@ -26,15 +26,17 @@ public static class DepositosService
     public static async Task<Dictionary<string, object?>> RegistrarAbono(AuthUser u, JsonObject b)
     {
         if (!Js.T(b["inquilino_id"])) throw new AppError("inquilino_id es requerido", 400);
-        var monto = Js.ParseFloat(b["monto"]);
-        if (double.IsNaN(monto) || monto <= 0) throw new AppError("El monto del abono debe ser mayor a 0", 400);
+        var montoCrudo = Js.ParseFloat(b["monto"]);
+        if (double.IsNaN(montoCrudo) || double.IsInfinity(montoCrudo) || montoCrudo <= 0) throw new AppError("El monto del abono debe ser mayor a 0", 400);
+        var monto = Math.Round((decimal)montoCrudo, 2, MidpointRounding.AwayFromZero);
+        if (monto <= 0m) throw new AppError("El monto del abono debe ser mayor a 0", 400);
 
         var inquilinoId = b.S("inquilino_id")!;
         var inquilino = await InquilinosRepository.ActivoDelPropietario(inquilinoId, u.Id)
             ?? throw new AppError("Inquilino no encontrado o no autorizado", 404);
 
         var metodo = Js.T(b["metodo"]) ? b.S("metodo") : (string.IsNullOrEmpty(inquilino.S("metodo_pago")) ? "efectivo" : inquilino.S("metodo_pago"));
-        var abono = await DepositosRepository.Insertar(inquilinoId, (decimal)monto, Inputs.Fecha(b["fecha"], "fecha"), metodo,
+        var abono = await DepositosRepository.Insertar(inquilinoId, monto, Inputs.Fecha(b["fecha"], "fecha"), metodo,
             Js.T(b["nota"]) ? b.S("nota") : null, Inputs.Imagen(b["comprobante_url"], "comprobante_url"), u.Actor);
 
         var pagado = await DepositosRepository.TotalPagado(inquilinoId);
@@ -43,7 +45,7 @@ public static class DepositosService
         var usuarioId = inquilino.S("usuario_id");
         if (!string.IsNullOrEmpty(usuarioId))
             Js.Bg(() => PushService.CreateAndSendNotification(usuarioId, "💰 Abono a depósito registrado",
-                $"Se registró un abono de ${Js.NumMx(monto)} a tu depósito. Saldo pendiente: ${Js.NumMx((double)saldo)}", "pago"));
+                $"Se registró un abono de ${Js.NumMx((double)monto)} a tu depósito. Saldo pendiente: ${Js.NumMx((double)saldo)}", "pago"));
 
         return new() { ["abono"] = abono, ["deposito_pagado"] = (double)pagado, ["deposito_saldo"] = (double)saldo };
     }
