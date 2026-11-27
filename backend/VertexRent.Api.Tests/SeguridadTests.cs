@@ -372,5 +372,60 @@ public sealed class SeguridadTests(ApiFixture api)
         // Colaborador con pagos.marcar sobre inquilino propio -> 200
         Assert.Equal(HttpStatusCode.OK, (await colabConPermiso.Post("/api/depositos/abono-semanal", new { inquilino_id = inqA, monto = 500 })).Status);
     }
+
+    // ── Revisión de seguridad: comprobantes, SSE, login y dinero ─────────────
+    [Fact]
+    public async Task Colaborador_sin_pagos_marcar_no_sube_comprobantes()
+    {
+        var a = await api.RegisterAdmin();
+        var inq = await api.CreateInquilino(a, 1);
+        var sin = await api.InviteUser(a, "cobrador", new[] { "pagos", "inquilinos" });
+        var con = await api.InviteUser(a, "cobrador", new[] { "pagos", "pagos.marcar" });
+        var cuerpo = new { comprobante_url = "data:image/jpeg;base64,/9j/4AAQSkZJRg==" };
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await sin.Post($"/api/pagos/comprobante/{inq}", cuerpo)).Status);
+        Assert.Equal(HttpStatusCode.OK, (await con.Post($"/api/pagos/comprobante/{inq}", cuerpo)).Status);
+    }
+
+    [Fact]
+    public async Task Boleto_sse_de_usuario_desactivado_no_abre_el_stream()
+    {
+        var a = await api.RegisterAdmin();
+        var colab = await api.InviteUser(a, "cobrador", new[] { "pagos" });
+        var (_, t) = await colab.Post("/api/events/ticket");
+        var ticket = t!["data"]!["ticket"]!.GetValue<string>();
+
+        Assert.Equal(HttpStatusCode.OK, (await a.Put($"/api/usuarios/{colab.Id}/toggle")).Status);
+
+        using var http = api.NewClient();
+        using var res = await http.GetAsync($"/api/events?ticket={ticket}", HttpCompletionOption.ResponseHeadersRead);
+        Assert.Equal(HttpStatusCode.Unauthorized, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task Login_con_correo_inexistente_responde_igual_que_con_clave_mala()
+    {
+        var a = await api.RegisterAdmin();
+        using var http = api.NewClient();
+        async Task<(HttpStatusCode, string?)> Intento(string email)
+        {
+            var r = await http.PostAsJsonAsync("/api/auth/login", new { email, password = "Clave-incorrecta-1" });
+            return (r.StatusCode, (JsonNode.Parse(await r.Content.ReadAsStringAsync()))?["message"]?.GetValue<string>());
+        }
+        var existente = await Intento(a.Email);
+        var inexistente = await Intento(api.UniqueEmail("nadie"));
+        Assert.Equal(HttpStatusCode.Unauthorized, inexistente.Item1);
+        Assert.Equal(existente, inexistente);
+    }
+
+    [Fact]
+    public async Task Abono_de_deposito_redondea_a_centavos()
+    {
+        var a = await api.RegisterAdmin();
+        var inq = await api.CreateInquilino(a, 1);
+        var (st, b) = await a.Post("/api/depositos/abono", new { inquilino_id = inq, monto = 100.005 });
+        Assert.Equal(HttpStatusCode.OK, st);
+        Assert.Equal(100.01m, decimal.Parse(b!["data"]!["abono"]!["monto"]!.ToString(), System.Globalization.CultureInfo.InvariantCulture));
+    }
 }
 

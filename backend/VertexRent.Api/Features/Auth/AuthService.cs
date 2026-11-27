@@ -5,13 +5,15 @@ namespace VertexRent.Api;
 /// <summary>Inicio de sesión, registro y contraseñas. El SQL vive en <see cref="AuthRepository"/>.</summary>
 public static class AuthService
 {
+    static readonly string HashFicticio = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString(), 12);
     const string CodigoInvalido = "Código de invitación inválido, expirado o ya utilizado";
 
     public static async Task<Dictionary<string, object?>> Login(string email, string password)
     {
         var user = await AuthRepository.UsuarioParaLogin(email.ToLowerInvariant().Trim());
-        if (user == null || !user.B("activo")) throw new AppError("Credenciales inválidas", 401);
-        if (!BCrypt.Net.BCrypt.Verify(password, user.S("password_hash"))) throw new AppError("Credenciales inválidas", 401);
+        // Con un usuario inexistente se verifica igual contra un hash ficticio: el tiempo de respuesta no delata qué correos existen.
+        var valido = BCrypt.Net.BCrypt.Verify(password, user?.S("password_hash") ?? HashFicticio);
+        if (user == null || !user.B("activo") || !valido) throw new AppError("Credenciales inválidas", 401);
 
         await AuthRepository.RegistrarAcceso(user.S("id")!);
 

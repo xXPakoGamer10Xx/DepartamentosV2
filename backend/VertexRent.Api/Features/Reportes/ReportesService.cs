@@ -28,20 +28,20 @@ public static class ReportesService
         await Task.WhenAll(detalleTarea, aniosTarea);
 
         var tipos = new[] { "renta", "extra", "deposito" };
-        var porTipo = tipos.ToDictionary(t => t, _ => new double[12]);
-        var totalMes = new double[12];
-        var deptos = new SortedDictionary<int, (double total, double[] meses)>();
+        var porTipo = tipos.ToDictionary(t => t, _ => new decimal[12]);
+        var totalMes = new decimal[12];
+        var deptos = new SortedDictionary<int, (decimal total, decimal[] meses)>();
 
         foreach (var fila in detalleTarea.Result)
         {
             var mes = fila.I("mes") - 1;
             if (mes < 0 || mes > 11) continue;
-            var monto = (double)fila.D("total");
+            var monto = fila.D("total");
             porTipo[fila.S("tipo")!][mes] += monto;
             totalMes[mes] += monto;
 
             var depto = fila.I("depto_numero");
-            if (!deptos.TryGetValue(depto, out var d)) d = (0, new double[12]);
+            if (!deptos.TryGetValue(depto, out var d)) d = (0m, new decimal[12]);
             d.total += monto;
             d.meses[mes] += monto;
             deptos[depto] = d;

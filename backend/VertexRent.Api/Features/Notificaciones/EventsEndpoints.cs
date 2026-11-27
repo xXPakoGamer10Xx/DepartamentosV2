@@ -13,6 +13,7 @@ public static class EventsEndpoints
             var ticket = Jwt.Create(new JsonObject
             {
                 ["scope"] = "sse_ticket", ["id"] = u.Actor, ["email"] = u.Email, ["rol"] = u.Rol, ["nombre_completo"] = u.NombreCompleto,
+                ["tv"] = u.Raw?["tv"]?.GetValue<int>() ?? 0,
             }, "60s");
             return Api.Data(new Dictionary<string, object?> { ["ticket"] = ticket });
         }).Auth();
@@ -39,6 +40,8 @@ public static class EventsEndpoints
                 while (!c.RequestAborted.IsCancellationRequested)
                 {
                     await Task.Delay(25000, c.RequestAborted);
+                    // Un usuario desactivado o con la sesión revocada pierde el stream sin esperar a que se reconecte.
+                    try { await Guards.SesionVigente(u.Id, u.Raw!); } catch (AppError) { break; }
                     if (!await client.Write(":ping\n\n")) break;
                 }
             }
