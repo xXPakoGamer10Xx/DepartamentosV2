@@ -19,7 +19,7 @@ import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { periodoActual } from '../../lib/fecha'
 import { SIN_DATOS } from '../../lib/vacio'
-import { diaPago, EPS, puedeCancelar, restanteMes, rowState, toSaldo, type EstadoActual, type RowState, type Saldo } from '../../lib/cobranza'
+import { diaPago, EPS, cobradoMes, puedeCancelar, restanteMes, rowState, toSaldo, type EstadoActual, type RowState, type Saldo } from '../../lib/cobranza'
 import { iniciales, money, num, periodoLabel } from '../../lib/format'
 import { useSSE } from '../../lib/sse'
 import type { Inquilino } from '../../lib/types'
@@ -92,7 +92,7 @@ export default function Pagos() {
 
   const kpi = useMemo(() => {
     const esperado = lista.reduce((a, i) => a + num(i.renta), 0)
-    const recaudado = rows.filter(r => r.state === 'pagado').reduce((a, r) => a + num(r.i.renta), 0)
+    const recaudado = rows.reduce((a, r) => a + cobradoMes(estados.get(r.i.id), num(r.i.renta)), 0)
     const vencido = lista.reduce((a, i) => a + (saldos.get(i.id)?.vencida ?? 0), 0)
     const sum = (f: (s: Saldo) => number) => lista.reduce((a, i) => a + f(saldos.get(i.id) ?? { total: 0, vencida: 0, periodoVencido: null, cuotasExtra: 0, deposito: 0 }), 0)
     let valor = 0, label = 'Por recaudar total', sub = ''
