@@ -12,7 +12,7 @@ import { Spinner } from '../components/ui/Spinner'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { diaYDiasDelMes, mesActualLabel } from '../lib/fecha'
-import { diaPago, EPS, restanteMes, rowState, toSaldo, type EstadoActual, type RowState, type Saldo } from '../lib/cobranza'
+import { diaPago, EPS, restanteMes, rowState, toSaldo, cobradoMes, type EstadoActual, type RowState, type Saldo } from '../lib/cobranza'
 import { fecha, iniciales, money, num } from '../lib/format'
 import { useSSE } from '../lib/sse'
 import { useUsaApp } from '../lib/usaApp'
@@ -63,7 +63,8 @@ export default function AdminHome() {
   }), [filas])
 
   const esperado = filas.reduce((a, f) => a + f.renta, 0)
-  const cobrado = listas.pagados.reduce((a, f) => a + f.renta, 0)
+  const estadoPor = new Map<string, EstadoActual>((estados.data ?? []).map(e => [e.inquilino_id, e]))
+  const cobrado = filas.reduce((a, f) => a + cobradoMes(estadoPor.get(f.id), f.renta), 0)
   const vencido = listas.atrasados.reduce((a, f) => a + f.saldo.vencida, 0)
   const pct = esperado > 0 ? Math.round((cobrado / esperado) * 100) : 0
   const [tabSel, setTabSel] = useState<Tab | null>(null)

@@ -53,3 +53,9 @@ export function restanteMes(e: EstadoActual | undefined, renta: number): number 
   const monto = e?.monto != null ? num(e.monto) : renta
   return Math.max(monto - num(e?.total_abonado), 0)
 }
+
+/** Lo ya cobrado de la renta del mes en curso: la renta completa si está pagada; si no, lo abonado (sin pasar de la renta). */
+export function cobradoMes(e: EstadoActual | undefined, renta: number): number {
+  if (e?.confirmado) return renta
+  return Math.min(num(e?.total_abonado), renta)
+}
